@@ -3,313 +3,514 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>gately-rs</title>
+<title>Gately RS · 管理后台</title>
 <style>
-body{font-family:system-ui,-apple-system,"Segoe UI",sans-serif;margin:0;background:#f6f7f9;color:#1f2328}
-header{background:#fff;border-bottom:1px solid #d8dee4;padding:12px 24px;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
-header h1{font-size:18px;margin:0 12px 0 0}
-main{max-width:1200px;margin:20px auto;padding:0 20px;display:grid;gap:14px}
-.card{background:#fff;border:1px solid #d8dee4;border-radius:8px;padding:14px}
-.card h3{margin:0 0 10px;font-size:15px}
-.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:6px 0}
-input,select,button{font:inherit;padding:6px 9px;border:1px solid #d0d7de;border-radius:6px}
-button{cursor:pointer;background:#f3f4f6}
-button.primary{background:#1f883d;color:#fff;border-color:#1f883d}
-button.danger{color:#b42318;border-color:#f3b4ad}
-pre{background:#f6f8fa;padding:10px;border-radius:6px;overflow:auto;font-size:12px;max-height:280px}
-small{color:#656d76}
-code{background:#f6f8fa;padding:2px 5px;border-radius:4px}
-.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:14px}
+:root{
+  --accent:#0e7c66;--accent-dark:#0b6352;--accent-soft:#e7f2f0;--chart2:#6366f1;
+  --border:#e6eaee;--border-soft:#edf0f3;--sidebar:#fff;--header:rgba(255,255,255,.86);
+  --page:#f4f6f8;--surface:#fff;--text:#1f2328;--text2:#606970;--text3:#8b949e;
+  --danger:#d92d20;--danger-soft:#fef3f2;--warn:#b54708;--warn-soft:#fffaeb;
+  --ok:#067647;--ok-soft:#ecfdf3;--radius:10px;--header-h:56px;--aside-w:228px;
+  --font:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+  --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;
+}
+html.dark{
+  --accent:#1fa386;--accent-dark:#4cb59e;--accent-soft:#15221f;--chart2:#818cf8;
+  --border:#2a2e33;--border-soft:#262a2f;--sidebar:#16181b;--header:rgba(22,24,27,.86);
+  --page:#0f1113;--surface:#16181b;--text:#e6edf3;--text2:#9aa4ad;--text3:#6e7681;
+  --danger:#f97066;--danger-soft:#2a1616;--warn:#fdb022;--warn-soft:#2b2113;
+  --ok:#6cddac;--ok-soft:#12271e;
+}
+*{box-sizing:border-box}
+html,body{margin:0;min-height:100%;background:var(--page);color:var(--text);font-family:var(--font);font-size:14px;-webkit-font-smoothing:antialiased}
+button,input,select,textarea{font:inherit;color:inherit}
+a{color:var(--accent);text-decoration:none}
+svg{width:18px;height:18px;flex:none;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.mono{font-family:var(--mono)}
+.muted{color:var(--text2)}
+.mini{font-size:12px}
+.hide{display:none!important}
+
+/* ---------- 登录 ---------- */
+#login{position:fixed;inset:0;z-index:100;display:flex;align-items:center;justify-content:center;padding:20px;
+  background:radial-gradient(60% 70% at 50% 0%,var(--accent-soft),transparent 70%),var(--page)}
+.login-card{width:min(420px,100%);background:var(--surface);border:1px solid var(--border);border-radius:16px;
+  padding:30px 28px;box-shadow:0 20px 50px -24px rgba(15,23,42,.35)}
+.login-brand{display:flex;align-items:center;gap:12px;margin-bottom:22px}
+.login-brand .logo{width:44px;height:44px;border-radius:12px;display:grid;place-items:center;color:#fff;
+  background:linear-gradient(135deg,var(--accent),var(--accent-dark))}
+.login-brand h1{margin:0;font-size:20px;letter-spacing:.2px}
+.login-brand p{margin:3px 0 0;color:var(--text2);font-size:12px}
+.field{display:flex;flex-direction:column;gap:6px;margin-bottom:14px}
+.field label{font-size:12px;color:var(--text2);font-weight:600}
+.field input,.field select,.field textarea{width:100%;padding:9px 11px;border:1px solid var(--border);border-radius:8px;
+  background:var(--surface);outline:none;transition:border-color .15s,box-shadow .15s}
+.field input:focus,.field select:focus,.field textarea:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
+.field textarea{min-height:96px;resize:vertical;font-family:var(--mono);font-size:12px}
+.field.inline{flex-direction:row;align-items:center;gap:8px}
+.field.inline input{width:auto}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:7px 13px;border-radius:8px;
+  border:1px solid var(--border);background:var(--surface);cursor:pointer;white-space:nowrap;transition:.15s}
+.btn:hover{border-color:var(--accent);color:var(--accent)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+.btn.primary:hover{background:var(--accent-dark);color:#fff}
+.btn.danger{color:var(--danger);border-color:var(--danger)}
+.btn.ghost{border-color:transparent;background:transparent;color:var(--text2);padding:5px 8px}
+.btn.ghost:hover{background:var(--accent-soft);color:var(--accent)}
+.btn.sm{padding:4px 9px;font-size:12px;border-radius:6px}
+.btn.block{width:100%;height:40px}
+.login-oidc{display:flex;flex-wrap:wrap;gap:8px;margin-top:16px;padding-top:16px;border-top:1px dashed var(--border)}
+
+/* ---------- 布局 ---------- */
+#app{display:none;min-height:100vh}
+.aside{position:fixed;inset:0 auto 0 0;width:var(--aside-w);background:var(--sidebar);border-right:1px solid var(--border);
+  display:flex;flex-direction:column;z-index:30;transition:width .2s,transform .2s}
+html.collapsed{--aside-w:68px}
+.brand{height:var(--header-h);display:flex;align-items:center;gap:10px;padding:0 16px;border-bottom:1px solid var(--border);overflow:hidden}
+.brand .logo{width:30px;height:30px;border-radius:9px;display:grid;place-items:center;color:#fff;background:linear-gradient(135deg,var(--accent),var(--accent-dark));flex:none}
+.brand b{font-size:15px;white-space:nowrap}
+.brand .ver{font-size:11px;color:var(--text3);font-family:var(--mono)}
+html.collapsed .brand b,html.collapsed .brand .ver,html.collapsed .nav-text,html.collapsed .nav-group-title,html.collapsed .searchbox span{display:none}
+.searchbox{margin:12px 12px 6px;padding:7px 10px;border:1px solid var(--border);border-radius:8px;display:flex;align-items:center;gap:8px;color:var(--text3);cursor:default}
+.searchbox input{border:0;background:transparent;outline:none;width:100%;min-width:0;font-size:13px}
+.nav{overflow-y:auto;flex:1;padding:4px 8px 16px;scrollbar-width:thin}
+.nav-group-title{padding:14px 10px 5px;font-size:11px;letter-spacing:.6px;color:var(--text3);text-transform:uppercase}
+.nav-item{display:flex;align-items:center;gap:10px;width:100%;min-height:36px;padding:7px 10px;border:0;border-radius:8px;
+  background:transparent;color:var(--text2);cursor:pointer;text-align:left;font-size:13px}
+.nav-item:hover{background:var(--accent-soft);color:var(--accent)}
+.nav-item.active{background:var(--accent-soft);color:var(--accent);font-weight:600}
+.nav-item .nav-text{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.nav-item.todo{opacity:.55}
+.nav-item.todo:hover{opacity:.85}
+.nav-item .soon{font-size:10px;border:1px solid var(--border);border-radius:4px;padding:0 4px;color:var(--text3)}
+html.collapsed .soon{display:none}
+.aside-foot{border-top:1px solid var(--border);padding:8px}
+.collapse{width:100%;height:34px;border:0;background:transparent;color:var(--text2);border-radius:8px;cursor:pointer;display:grid;place-items:center}
+.collapse:hover{background:var(--accent-soft);color:var(--accent)}
+
+.main{margin-left:var(--aside-w);min-width:0;transition:margin-left .2s}
+.header{position:sticky;top:0;z-index:20;height:var(--header-h);display:flex;align-items:center;justify-content:space-between;
+  gap:12px;padding:0 24px;border-bottom:1px solid var(--border);background:var(--header);backdrop-filter:saturate(180%) blur(10px)}
+.crumb{display:flex;align-items:center;gap:7px;min-width:0}
+.crumb .g{color:var(--text2);font-size:13px}
+.crumb .t{font-weight:600;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.header-right{display:flex;align-items:center;gap:8px;flex:none}
+.icon-btn{width:36px;height:36px;border:0;border-radius:8px;background:transparent;color:var(--text2);cursor:pointer;display:grid;place-items:center}
+.icon-btn:hover{background:var(--accent-soft);color:var(--accent)}
+.menu-btn{display:none}
+.user{display:flex;align-items:center;gap:8px;padding:3px 8px 3px 3px;border:1px solid var(--border);border-radius:20px;background:var(--surface);cursor:pointer}
+.avatar{width:28px;height:28px;border-radius:50%;display:grid;place-items:center;background:var(--accent);color:#fff;font-weight:700;font-size:12px}
+.user .name{font-size:13px;max-width:110px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.content{max-width:1440px;margin:0 auto;padding:20px 24px 32px}
+.page-head{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:16px;flex-wrap:wrap}
+.page-head h2{margin:0;font-size:21px;line-height:1.3}
+.page-head p{margin:6px 0 0;color:var(--text2);font-size:13px}
+.page-actions{display:flex;gap:8px;flex-wrap:wrap}
+
+/* ---------- 卡片 / 表格 / 标签 ---------- */
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);min-width:0;overflow:hidden}
+.card+.card{margin-top:16px}
+.card-head{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;padding:12px 16px;border-bottom:1px solid var(--border);min-height:48px}
+.card-title{display:flex;align-items:center;gap:8px;font-weight:600;font-size:14px}
+.card-desc{font-size:12px;color:var(--text2)}
+.card-body{padding:16px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:16px}
+.grid>.card{margin-top:0}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:16px;margin-bottom:16px}
+.stat{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px 18px;position:relative;overflow:hidden}
+.stat::before{content:"";position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,var(--accent),var(--chart2),transparent);opacity:.8}
+.stat .k{font-size:12px;color:var(--text2)}
+.stat .v{font-size:26px;font-weight:700;line-height:1.3;margin-top:6px;font-variant-numeric:tabular-nums}
+.stat .s{font-size:11px;color:var(--text3);margin-top:2px}
+.hero{display:flex;align-items:center;justify-content:space-between;gap:20px;flex-wrap:wrap;padding:22px 24px;border-radius:14px;
+  border:1px solid var(--border);background:radial-gradient(120% 140% at 0% 0%,var(--accent-soft),transparent 55%),var(--surface);margin-bottom:16px}
+.hero-main{display:flex;align-items:center;gap:16px;min-width:0}
+.hero-icon{width:52px;height:52px;border-radius:14px;display:grid;place-items:center;color:#fff;background:linear-gradient(135deg,var(--accent),var(--accent-dark));flex:none}
+.hero-name{font-size:21px;font-weight:700;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.hero-sub{font-size:13px;color:var(--text2);margin-top:4px}
+.hero-meta{display:flex;flex-wrap:wrap;gap:4px 16px;margin-top:9px;font-size:12px;color:var(--text2)}
+.hero-side{display:flex;gap:26px;flex-wrap:wrap}
+.kv-k{font-size:12px;color:var(--text2)}
+.kv-v{font-size:15px;font-weight:600;margin-top:6px}
+.dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--ok);box-shadow:0 0 0 3px var(--ok-soft)}
+.dot.off{background:var(--text3);box-shadow:0 0 0 3px var(--page)}
+.dot.warn{background:var(--warn);box-shadow:0 0 0 3px var(--warn-soft)}
+.tag{display:inline-flex;align-items:center;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:600;background:var(--accent-soft);color:var(--accent)}
+.tag.gray{background:var(--page);color:var(--text2)}
+.tag.red{background:var(--danger-soft);color:var(--danger)}
+.tag.amber{background:var(--warn-soft);color:var(--warn)}
+.tag.green{background:var(--ok-soft);color:var(--ok)}
+.table-wrap{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th,td{padding:10px 14px;text-align:left;border-bottom:1px solid var(--border-soft);vertical-align:middle}
+th{font-size:12px;color:var(--text2);font-weight:600;white-space:nowrap;background:color-mix(in srgb,var(--page) 60%,var(--surface))}
+tbody tr:hover{background:color-mix(in srgb,var(--accent-soft) 45%,var(--surface))}
+tbody tr:last-child td{border-bottom:0}
+td .ops{display:flex;gap:6px;flex-wrap:wrap}
+.empty{padding:26px 16px;text-align:center;color:var(--text3);font-size:13px}
+details{margin-top:12px}
+summary{cursor:pointer;color:var(--text2);font-size:12px}
+pre{margin:8px 0 0;padding:12px;border-radius:8px;background:var(--page);border:1px solid var(--border-soft);font-size:12px;overflow:auto;max-height:320px;font-family:var(--mono)}
+.help{font-size:12px;color:var(--text2);margin-top:8px;line-height:1.6}
+.svc{display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:8px}
+.svc:hover{background:var(--accent-soft)}
+.svc .n{width:90px;font-weight:600;font-size:13px;flex:none}
+.svc .d{flex:1;min-width:0;display:flex;gap:6px 14px;flex-wrap:wrap;font-size:12px;color:var(--text2)}
+
+/* ---------- 弹层 / 提示 ---------- */
+#modal{position:fixed;inset:0;z-index:80;display:none;align-items:center;justify-content:center;padding:20px;background:rgba(15,23,42,.45);backdrop-filter:blur(2px)}
+#modal.show{display:flex}
+.dialog{width:min(520px,100%);max-height:calc(100vh - 40px);overflow:auto;background:var(--surface);border:1px solid var(--border);border-radius:14px;box-shadow:0 24px 60px -20px rgba(0,0,0,.4)}
+.dialog-head{display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid var(--border);font-weight:600}
+.dialog-body{padding:18px 20px}
+.dialog-foot{display:flex;justify-content:flex-end;gap:8px;padding:14px 20px;border-top:1px solid var(--border)}
+#toasts{position:fixed;top:14px;right:14px;z-index:120;display:flex;flex-direction:column;gap:8px;max-width:min(380px,calc(100vw - 28px))}
+.toast{display:flex;align-items:flex-start;gap:8px;padding:11px 14px;border-radius:10px;background:var(--surface);border:1px solid var(--border);box-shadow:0 8px 24px -12px rgba(0,0,0,.35);font-size:13px;line-height:1.5}
+.toast.err{border-color:var(--danger);color:var(--danger)}
+.toast.ok{border-color:var(--ok)}
+.toast .msg{word-break:break-word}
+
+@media(max-width:900px){.stats{grid-template-columns:repeat(2,1fr)}.hero-side{width:100%;padding-top:14px;border-top:1px dashed var(--border)}}
+@media(max-width:768px){
+  :root{--header-h:52px;--aside-w:228px}
+  .aside{transform:translateX(-100%)}
+  html:not(.collapsed) .aside.open{transform:none;box-shadow:12px 0 30px -18px rgba(0,0,0,.5)}
+  .main{margin-left:0}
+  .menu-btn{display:grid}
+  .content{padding:14px 12px 24px}
+  .header{padding:0 8px 0 4px}
+  .user .name{display:none}
+  .stats{grid-template-columns:repeat(2,1fr);gap:10px}
+  .stat{padding:12px}
+  .stat .v{font-size:21px}
+}
+@media(max-width:480px){.stats{grid-template-columns:1fr 1fr}.hero-icon{width:42px;height:42px}.hero-name{font-size:18px}}
 </style>
 </head>
 <body>
-<header>
-  <h1>gately-rs</h1>
-  <input id="password" type="password" placeholder="admin password" style="width:160px">
-  <input id="totp" type="text" placeholder="TOTP (可选)" style="width:100px">
-  <button class="primary" id="loginBtn">登录</button>
-  <span id="oidc"></span>
-  <span id="who"></span>
-</header>
-<main>
-  <section class="card">
-    <h3>状态与配置</h3>
-    <div class="row"><button id="refreshBtn">刷新</button><button id="reloadBtn">从磁盘重载配置</button></div>
-    <pre id="status">未登录</pre>
-  </section>
 
-  <div class="grid">
-  <section class="card">
-    <h3>Web 站点（反向代理 / WAF / IP 过滤）</h3>
-    <div class="row">
-      <input id="siteDomains" placeholder="域名，逗号分隔" style="width:220px">
-      <input id="siteBackend" placeholder="后端 http://127.0.0.1:3000" style="width:230px">
-      <button class="primary" id="addSiteBtn">添加</button>
+<div id="login" class="hide">
+  <div class="login-card">
+    <div class="login-brand">
+      <div class="logo"><svg viewBox="0 0 24 24"><path d="M12 2 4 5v6c0 5 3.4 9.4 8 11 4.6-1.6 8-6 8-11V5l-8-3Z"/><path d="m9 12 2 2 4-4"/></svg></div>
+      <div><h1>Gately RS</h1><p>Rust 边缘网关 · 独立重实现</p></div>
     </div>
-    <div id="sites"></div>
-    <small>站点级 WAF 与 IP 过滤请通过 /api/config 或编辑 gately.json 设置 waf_profile / waf_mode / allowed_ips / denied_ips。</small>
-  </section>
-
-  <section class="card">
-    <h3>TLS 证书（静态 PEM）</h3>
-    <div class="row">
-      <input id="certId" placeholder="证书 ID" style="width:120px">
-      <input id="certPath" placeholder="cert.pem 路径" style="width:200px">
-      <input id="keyPath" placeholder="key.pem 路径" style="width:200px">
-      <button class="primary" id="addCertBtn">添加</button>
-    </div>
-    <div id="certs"></div>
-  </section>
-
-  <section class="card">
-    <h3>ACME 自动证书（HTTP-01，需 80 端口可达）</h3>
-    <div class="row">
-      <input id="acmeId" placeholder="任务 ID" style="width:120px">
-      <input id="acmeDomains" placeholder="域名，逗号分隔" style="width:220px">
-      <input id="acmeEmail" placeholder="邮箱" style="width:170px">
-      <input id="acmeCertId" placeholder="证书 ID" style="width:120px">
-      <button class="primary" id="addAcmeBtn">添加</button>
-    </div>
-    <div id="acme"></div>
-  </section>
-
-  <section class="card">
-    <h3>动态域名（Cloudflare）</h3>
-    <div class="row">
-      <input id="ddnsName" placeholder="nas.example.com" style="width:190px">
-      <input id="ddnsZone" placeholder="Zone ID" style="width:150px">
-      <input id="ddnsToken" type="password" placeholder="API Token" style="width:170px">
-      <select id="ddnsType"><option>A</option><option>AAAA</option></select>
-      <select id="ddnsKind"><option value="static">静态 IP</option><option value="url">URL 获取</option></select>
-      <input id="ddnsValue" placeholder="IP 或 URL（支持 {STUN_id_ADDR}）" style="width:200px">
-      <button class="primary" id="addDdnsBtn">添加</button>
-    </div>
-    <div id="ddns"></div>
-  </section>
-
-  <section class="card">
-    <h3>WAF 规则 / 配置集</h3>
-    <div class="row">
-      <input id="wafId" placeholder="规则 ID" style="width:110px">
-      <input id="wafName" placeholder="名称" style="width:130px">
-      <input id="wafPattern" placeholder="正则，如 \.\./" style="width:170px">
-      <select id="wafTarget"><option value="path">path</option><option value="query">query</option><option value="user_agent">user_agent</option><option value="body">body</option></select>
-      <select id="wafAction"><option value="deny">deny</option><option value="log">log</option></select>
-      <button class="primary" id="addWafBtn">添加规则</button>
-    </div>
-    <div id="waf"></div>
-  </section>
-
-  <section class="card">
-    <h3>入侵防护 / 封禁</h3>
-    <div class="row">
-      <label><input id="jailEnabled" type="checkbox"> 启用</label>
-      <input id="jailLog" placeholder="日志文件路径" style="width:190px">
-      <input id="jailPatterns" placeholder="失败正则，逗号分隔" style="width:200px">
-      <input id="jailMax" type="number" value="5" style="width:70px" title="失败次数">
-      <select id="jailBackend"><option value="none">none</option><option value="nftables">nftables</option><option value="iptables">iptables</option></select>
-      <button class="primary" id="saveJailBtn">保存</button>
-    </div>
-    <pre id="bans"></pre>
-  </section>
-
-  <section class="card">
-    <h3>隧道托管（外部二进制）</h3>
-    <div class="row">
-      <input id="tunId" placeholder="ID" style="width:110px">
-      <input id="tunName" placeholder="名称" style="width:130px">
-      <input id="tunBinary" placeholder="frpc / cloudflared 路径" style="width:220px">
-      <input id="tunArgs" placeholder="参数，空格分隔" style="width:180px">
-      <button class="primary" id="addTunBtn">添加</button>
-    </div>
-    <div id="tunnels"></div>
-  </section>
-
-  <section class="card">
-    <h3>STUN 公网地址探测</h3>
-    <div class="row">
-      <input id="stunId" placeholder="ID" style="width:110px">
-      <input id="stunServer" placeholder="stun.l.google.com:19302" style="width:250px">
-      <button class="primary" id="addStunBtn">添加</button>
-    </div>
-    <div id="stun"></div>
-  </section>
-
-  <section class="card">
-    <h3>配置历史 / 回滚</h3>
-    <div class="row"><button id="historyBtn">刷新列表</button></div>
-    <div id="history"></div>
-  </section>
-
-  <section class="card">
-    <h3>导入 Lucky / JSON / ZIP</h3>
-    <div class="row">
-      <input id="importPaths" placeholder="文件路径，逗号分隔" style="width:330px">
-      <label><input id="keepEnabled" type="checkbox"> 保留启用状态</label>
-      <button class="primary" id="importBtn">导入</button>
-    </div>
-    <pre id="importResult"></pre>
-    <small>加密的 .lkcf 无法解析，会给出提示；导入的规则默认停用。</small>
-  </section>
-
-  <section class="card">
-    <h3>认证（TOTP / OIDC）</h3>
-    <div class="row">
-      <input id="totpSecret" placeholder="Base32 TOTP secret" style="width:190px">
-      <label><input id="requireTotp" type="checkbox"> 登录要求 TOTP</label>
-      <input id="oidcJson" placeholder='OIDC providers JSON' style="width:260px">
-      <button class="primary" id="saveAuthBtn">保存</button>
-    </div>
-  </section>
+    <div class="field"><label>管理员密码</label><input id="lgPass" type="password" autocomplete="current-password" placeholder="默认 gately.cn"></div>
+    <div class="field"><label>TOTP 验证码（如已开启）</label><input id="lgTotp" inputmode="numeric" autocomplete="one-time-code" placeholder="6 位数字，可留空"></div>
+    <button class="btn primary block" id="lgBtn">登 录</button>
+    <div id="lgOidc" class="login-oidc"></div>
+    <p class="help">首次登录后请立即修改默认密码与 Token。本后台不应直接暴露到公网。</p>
   </div>
-</main>
+</div>
+
+<div id="app">
+  <aside class="aside" id="aside">
+    <div class="brand">
+      <div class="logo"><svg viewBox="0 0 24 24"><path d="M12 2 4 5v6c0 5 3.4 9.4 8 11 4.6-1.6 8-6 8-11V5l-8-3Z"/><path d="m9 12 2 2 4-4"/></svg></div>
+      <b>Gately RS</b><span class="ver" id="sideVer"></span>
+    </div>
+    <div class="searchbox"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><input id="navSearch" placeholder="筛选菜单"></div>
+    <nav class="nav" id="nav"></nav>
+    <div class="aside-foot"><button class="collapse" id="collapseBtn" title="收起侧边栏"><svg viewBox="0 0 24 24"><path d="M14 6 8 12l6 6"/><path d="M20 4v16"/></svg></button></div>
+  </aside>
+  <div class="main">
+    <header class="header">
+      <div class="crumb">
+        <button class="icon-btn menu-btn" id="menuBtn"><svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
+        <span class="g" id="crumbG"></span><svg viewBox="0 0 24 24" id="crumbSep" style="width:14px;height:14px;color:var(--text3)"><path d="m9 6 6 6-6 6"/></svg>
+        <span class="t" id="crumbT"></span>
+      </div>
+      <div class="header-right">
+        <button class="icon-btn" id="themeBtn" title="切换主题"><svg viewBox="0 0 24 24"><path d="M12 3a9 9 0 1 0 9 9 7 7 0 0 1-9-9Z"/></svg></button>
+        <button class="icon-btn" id="refreshBtn" title="刷新数据"><svg viewBox="0 0 24 24"><path d="M20 11a8 8 0 1 0-2 6"/><path d="M20 4v7h-7"/></svg></button>
+        <button class="user" id="userBtn"><span class="avatar">A</span><span class="name">admin</span><svg viewBox="0 0 24 24" style="width:14px;height:14px"><path d="m6 9 6 6 6-6"/></svg></button>
+      </div>
+    </header>
+    <main class="content">
+      <div class="page-head"><div><h2 id="pageTitle"></h2><p id="pageDesc"></p></div><div class="page-actions" id="pageActions"></div></div>
+      <div id="pageBody"></div>
+    </main>
+  </div>
+</div>
+
+<div id="modal"><div class="dialog"><div class="dialog-head"><span id="dlgTitle"></span><button class="icon-btn" id="dlgClose">×</button></div><div class="dialog-body" id="dlgBody"></div><div class="dialog-foot" id="dlgFoot"></div></div></div>
+<div id="toasts"></div>
 
 <script>
-const $ = id => document.getElementById(id);
-let token = localStorage.getItem('gately_token') || '';
-const params = new URLSearchParams(location.search);
-if (params.get('oidc_code')) {
-  fetch('/api/login/oidc/token', {method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'},
-    body:'code=' + encodeURIComponent(params.get('oidc_code'))})
-    .then(r => r.json()).then(d => { if (d.token) { token = d.token; localStorage.setItem('gately_token', token); $('who').textContent='OIDC 已登录'; refresh(); } });
-}
-if (token) $('who').textContent = '已保存 token';
+const ICON={
+ dashboard:'M3 3h8v8H3zM13 3h8v8h-8zM3 13h8v8H3zM13 13h8v8h-8z',
+ globe:'M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18ZM3 12h18M12 3c3 3 3 15 0 18M12 3c-3 3-3 15 0 18',
+ shield:'M12 2 4 5v6c0 5 3.4 9.4 8 11 4.6-1.6 8-6 8-11V5l-8-3Zm-3 10 2 2 4-4',
+ server:'M4 4h16v6H4zM4 14h16v6H4zM7 7h.01M7 17h.01',
+ route:'M6 3v6a3 3 0 0 0 3 3h6a3 3 0 0 1 3 3v6M6 3 3 6m3-3 3 3M18 21l-3-3m3 3 3-3',
+ clock:'M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18ZM12 7v5l3 2',
+ key:'M14 7a4 4 0 1 0-3.5 4L9 13H5v4H2v4h4v-3h3v-3h2l2-2c.6.2 1.3.3 2 .3A4 4 0 0 0 14 7Z',
+ tunnel:'M3 8h12a4 4 0 0 1 0 8H9M3 8l3-3M3 8l3 3M21 12h-5m5 0-3-3m3 3-3 3',
+ settings:'M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6ZM19 12a7 7 0 0 0-.1-1l2-1.5-2-3.4-2.4 1a7 7 0 0 0-1.7-1L14.5 3h-4l-.3 2.1a7 7 0 0 0-1.7 1l-2.4-1-2 3.4L6.1 11a7 7 0 0 0 0 2l-2 1.5 2 3.4 2.4-1a7 7 0 0 0 1.7 1l.3 2.1h4l.3-2.1a7 7 0 0 0 1.7-1l2.4 1 2-3.4-2-1.5c.1-.3.1-.7.1-1Z',
+ import:'M12 3v12m0 0 4-4m-4 4-4-4M4 17v3h16v-3',
+ log:'M5 4h14v16H5zM8 8h8M8 12h8M8 16h5',
+ plus:'M12 5v14M5 12h14', trash:'M4 7h16M9 7V4h6v3m-9 0 1 13h10l1-13', play:'m8 5 11 7-11 7V5Z', history:'M3 12a9 9 0 1 0 3-6.7M3 4v5h5M12 7v5l4 2'
+};
+function ico(n){return '<svg viewBox="0 0 24 24"><path d="'+(ICON[n]||ICON.dashboard)+'"/></svg>'}
 
-async function api(path, options = {}) {
-  const opts = Object.assign({}, options);
-  opts.headers = Object.assign({}, opts.headers || {});
-  if (token) opts.headers['Authorization'] = 'Bearer ' + token;
-  if (opts.body && typeof opts.body !== 'string') {
-    opts.headers['Content-Type'] = 'application/json';
-    opts.body = JSON.stringify(opts.body);
+const NAV=[
+ {g:'',items:[{id:'overview',name:'总览',icon:'dashboard'}]},
+ {g:'网络',items:[{id:'ddns',name:'动态域名',icon:'globe'},{id:'portforward',name:'端口转发',icon:'route',todo:1},{id:'protoroute',name:'协议分流',icon:'route',todo:1}]},
+ {g:'安全',items:[{id:'waf',name:'WAF 规则',icon:'shield'},{id:'jail',name:'入侵防护',icon:'shield'},{id:'knock',name:'端口敲门',icon:'key',todo:1}]},
+ {g:'Web 服务',items:[{id:'sites',name:'Web 站点',icon:'server'},{id:'certs',name:'TLS 证书',icon:'key'},{id:'acme',name:'ACME 证书',icon:'key'},{id:'topology',name:'网络拓扑',icon:'route',todo:1}]},
+ {g:'隧道',items:[{id:'tunnels',name:'隧道托管',icon:'tunnel'},{id:'stun',name:'STUN 探测',icon:'globe'},{id:'mesh',name:'组网管理',icon:'tunnel',todo:1}]},
+ {g:'系统',items:[{id:'history',name:'配置历史',icon:'history'},{id:'import',name:'导入迁移',icon:'import'},{id:'auth',name:'认证安全',icon:'key'},{id:'logs',name:'日志审计',icon:'log',todo:1}]}
+];
+const PAGES={overview:'总览',ddns:'动态域名',portforward:'端口转发',protoroute:'协议分流',waf:'WAF 规则',jail:'入侵防护',knock:'端口敲门',sites:'Web 站点',certs:'TLS 证书',acme:'ACME 证书',topology:'网络拓扑',tunnels:'隧道托管',stun:'STUN 探测',mesh:'组网管理',history:'配置历史',import:'导入迁移',auth:'认证安全',logs:'日志审计'};
+
+const $=id=>document.getElementById(id);
+let token=localStorage.getItem('gately_token')||'';
+let current='overview', C={status:null,config:null,sites:[],certs:[],ddns:[],acme:[],waf:[],profiles:[],tunnels:[],stun:[],history:[],bans:[]};
+const split=v=>String(v||'').split(',').map(x=>x.trim()).filter(Boolean);
+const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const short=v=>{v=String(v??'');return v.length>34?v.slice(0,31)+'…':v};
+
+function toast(msg,type){
+  const el=document.createElement('div');el.className='toast '+(type||'');
+  el.innerHTML='<span>'+(type==='err'?'✖':type==='ok'?'✔':'ℹ')+'</span><span class="msg">'+esc(msg)+'</span>';
+  $('toasts').appendChild(el);setTimeout(()=>el.remove(),4200);
+}
+async function api(path,opt){
+  opt=Object.assign({},opt||{});opt.headers=Object.assign({},opt.headers||{});
+  if(token)opt.headers.Authorization='Bearer '+token;
+  if(opt.body&&typeof opt.body!=='string'){opt.headers['Content-Type']='application/json';opt.body=JSON.stringify(opt.body)}
+  const r=await fetch('/api'+path,opt);const t=await r.text();let d;try{d=JSON.parse(t)}catch{d=t}
+  if(!r.ok)throw new Error(typeof d==='string'?d:JSON.stringify(d));return d;
+}
+
+function renderNav(filter){
+  const f=(filter||'').toLowerCase();let html='';
+  for(const grp of NAV){
+    const items=grp.items.filter(i=>!f||i.name.toLowerCase().includes(f));
+    if(!items.length)continue;
+    if(grp.g)html+='<div class="nav-group-title">'+esc(grp.g)+'</div>';
+    for(const i of items)html+='<button class="nav-item'+(current===i.id?' active':'')+(i.todo?' todo':'')+'" data-id="'+i.id+'">'+ico(i.icon)+'<span class="nav-text">'+esc(i.name)+'</span>'+(i.todo?'<span class="soon">未实现</span>':'')+'</button>';
   }
-  const resp = await fetch('/api' + path, opts);
-  const text = await resp.text();
-  let data;
-  try { data = JSON.parse(text); } catch { data = text; }
-  if (!resp.ok) throw new Error(typeof data === 'string' ? data : JSON.stringify(data));
-  return data;
+  $('nav').innerHTML=html;
+  $('nav').querySelectorAll('.nav-item').forEach(b=>b.onclick=()=>go(b.dataset.id));
 }
-function esc(v) { return String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
-function rows(items, render) { return items.length ? items.map(render).join('') : '<small>暂无</small>'; }
-
-function renderSites(items) {
-  $('sites').innerHTML = rows(items, s => `<div class="row"><code>${esc(s.id)}</code><span>${esc(s.domains.join(', '))}</span><small>→ ${esc(s.backend)}</small><small>${esc(s.waf_mode||'off')}</small><button class="danger" onclick="del('/sites/${encodeURIComponent(s.id)}')">删除</button></div>`);
-}
-function renderCerts(items) {
-  $('certs').innerHTML = rows(items, c => `<div class="row"><code>${esc(c.id)}</code><small>${esc(c.cert_path)}</small><button class="danger" onclick="del('/certs/${encodeURIComponent(c.id)}')">删除</button></div>`);
-}
-function renderDdns(items, status) {
-  $('ddns').innerHTML = rows(items, t => {
-    const st = status[t.id] || {};
-    return `<div class="row"><code>${esc(t.id)}</code><span>${esc(t.name)} (${esc(t.record_type)})</span><small>${esc(st.last_ip || t.last_ip || '-')}</small>${st.last_error ? `<small style="color:#b42318">${esc(st.last_error)}</small>`:''}<button onclick="runTask('/ddns/${encodeURIComponent(t.id)}/run','DDNS')">立即执行</button><button class="danger" onclick="del('/ddns/${encodeURIComponent(t.id)}')">删除</button></div>`;
-  });
-}
-function renderAcme(items) {
-  $('acme').innerHTML = rows(items, t => `<div class="row"><code>${esc(t.id)}</code><span>${esc(t.domains.join(', '))}</span><small>${esc(t.last_error||'')}</small><button onclick="runTask('/acme/${encodeURIComponent(t.id)}/run','ACME')">签发</button><button class="danger" onclick="del('/acme/${encodeURIComponent(t.id)}')">删除</button></div>`);
-}
-function renderWaf(items) {
-  $('waf').innerHTML = rows(items, r => `<div class="row"><code>${esc(r.id)}</code><span>${esc(r.name)}</span><small>${esc(r.target)} / ${esc(r.action)}</small><button class="danger" onclick="del('/waf/rules/${encodeURIComponent(r.id)}')">删除</button></div>`);
-}
-function renderTunnels(items, status) {
-  $('tunnels').innerHTML = rows(items, t => `<div class="row"><code>${esc(t.id)}</code><span>${esc(t.name)}</span><small>${status[t.id] && status[t.id].running ? '运行中 pid='+esc(status[t.id].pid) : '已停止'}</small><button class="danger" onclick="del('/tunnels/${encodeURIComponent(t.id)}')">删除</button></div>`);
-}
-function renderStun(items, status) {
-  $('stun').innerHTML = rows(items, t => `<div class="row"><code>${esc(t.id)}</code><span>${esc(t.server)}</span><small>${esc(status[t.id] ? (status[t.id].public_ip||'')+':'+(status[t.id].public_port||'') : '')}</small><button class="danger" onclick="del('/stun/${encodeURIComponent(t.id)}')">删除</button></div>`);
+function go(id){
+  const item=NAV.flatMap(g=>g.items).find(i=>i.id===id);
+  if(item&&item.todo){toast(item.name+' 在 gately-rs 中尚未实现');return}
+  current=id;location.hash=id;
+  const grp=NAV.find(g=>g.items.some(i=>i.id===id));
+  $('crumbG').textContent=grp&&grp.g?grp.g:'首页';$('crumbSep').style.display=grp&&grp.g?'':'none';$('crumbT').textContent=PAGES[id]||id;
+  renderNav($('navSearch').value);renderPage();
+  if(innerWidth<=768)$('aside').classList.remove('open');
 }
 
-async function refresh() {
-  try {
-    const s = await api('/status');
-    $('status').textContent = JSON.stringify(s, null, 2);
-    renderSites(await api('/sites'));
-    renderCerts(await api('/certs'));
-    renderDdns(await api('/ddns'), s.ddns_status || {});
-    renderAcme(await api('/acme'));
-    renderWaf(await api('/waf/rules'));
-    const ts = await api('/tunnels/status'); renderTunnels(await api('/tunnels'), ts);
-    const ss = await api('/stun/status'); renderStun(await api('/stun'), ss);
-    $('bans').textContent = JSON.stringify(await api('/jail/bans'), null, 2);
-    const cfg = await api('/config');
-    $('jailEnabled').checked = cfg.jail.enabled;
-    $('jailLog').value = cfg.jail.log_path || '';
-    $('jailPatterns').value = (cfg.jail.patterns || []).join(',');
-    $('jailMax').value = cfg.jail.max_failures;
-    $('jailBackend').value = cfg.jail.backend;
-    $('totpSecret').value = cfg.auth.totp_secret || '';
-    $('requireTotp').checked = cfg.auth.require_totp;
-    $('oidcJson').value = JSON.stringify(cfg.auth.oidc || []);
-  } catch (e) {
-    $('status').textContent = '请求失败：' + e.message;
-    if (e.message.includes('401')) alert('可能需要密码或 TOTP');
+function table(cols,rows,emptyText){
+  if(!rows.length)return '<div class="empty">'+(emptyText||'暂无数据')+'</div>';
+  return '<div class="table-wrap"><table><thead><tr>'+cols.map(c=>'<th>'+c+'</th>').join('')+'</tr></thead><tbody>'+rows.join('')+'</tbody></table></div>';
+}
+const delBtn=p=>'<button class="btn ghost sm" onclick="delItem(\''+p+'\')">'+ico('trash')+'</button>';
+const runBtn=(p,t)=>'<button class="btn sm" onclick="runItem(\''+p+'\',\''+t+'\')">'+ico('play')+t+'</button>';
+
+function pageOverview(){
+  const s=C.status||{};const ok=C.sites.length+C.certs.length+C.ddns.length+C.acme.length+C.waf.length+C.tunnels.length+C.stun.length;
+  $('pageDesc').textContent='本机网关运行状态与已配置模块概览';
+  $('pageActions').innerHTML='<button class="btn" onclick="reloadCfg()">'+ico('history')+'从磁盘重载</button>';
+  $('pageBody').innerHTML=
+   '<div class="hero"><div class="hero-main"><div class="hero-icon"><svg viewBox="0 0 24 24"><path d="M12 2 4 5v6c0 5 3.4 9.4 8 11 4.6-1.6 8-6 8-11V5l-8-3Z"/><path d="m9 12 2 2 4-4"/></svg></div><div><div class="hero-name">gately-rs <span class="tag green">运行中</span></div><div class="hero-sub">Rust 边缘网关 · 非官方独立重实现 · v'+esc(s.version||'0.2.0')+'</div><div class="hero-meta"><span>监听器 '+(s.listeners??'-')+'</span><span>WAF 配置集 '+(s.waf_profiles??'-')+'</span><span>OIDC 提供商 '+(s.oidc_providers??'-')+'</span><span class="dot"></span><span>已加载 '+ok+' 条规则</span></div></div></div>'+
+   '<div class="hero-side"><div><div class="kv-k">管理 Token</div><div class="kv-v mono">已加载 · 请勿公开</div></div><div><div class="kv-k">封禁 IP</div><div class="kv-v">'+(s.banned_ips??0)+'</div></div><div><div class="kv-k">入侵防护</div><div class="kv-v">'+(s.jail?'<span class="tag green">已启用</span>':'<span class="tag gray">未启用</span>')+'</div></div></div></div>'+
+   '<div class="stats">'+
+    '<div class="stat"><div class="k">Web 站点</div><div class="v">'+(s.sites??0)+'</div><div class="s">反向代理规则</div></div>'+
+    '<div class="stat"><div class="k">证书 / ACME</div><div class="v">'+(s.certificates??0)+' / '+(s.acme_tasks??0)+'</div><div class="s">静态 PEM / 自动签发</div></div>'+
+    '<div class="stat"><div class="k">动态域名</div><div class="v">'+(s.ddns_tasks??0)+'</div><div class="s">DDNS 任务</div></div>'+
+    '<div class="stat"><div class="k">安全规则</div><div class="v">'+(s.waf_rules??0)+'</div><div class="s">WAF 规则 / 配置集</div></div>'+
+   '</div>'+
+   '<div class="grid"><div class="card"><div class="card-head"><div class="card-title">'+ico('dashboard')+'服务状态</div><span class="card-desc">点击名称进入对应模块</span></div><div class="card-body">'+
+    [['Web 站点','sites',C.sites.length],['TLS 证书','certs',C.certs.length],['ACME 证书','acme',C.acme.length],['动态域名','ddns',C.ddns.length],['WAF 规则','waf',C.waf.length],['入侵防护','jail',C.status&&C.status.jail?1:0],['隧道托管','tunnels',C.tunnels.length],['STUN 探测','stun',C.stun.length]].map(x=>
+      '<div class="svc" onclick="go(\''+x[1]+'\')" style="cursor:pointer"><span class="dot'+(x[2]?'':' off')+'"></span><span class="n">'+x[0]+'</span><span class="d"><span>'+x[2]+' 项</span></span>'+ico('route')+'</div>').join('')+
+   '</div></div><div class="card"><div class="card-head"><div class="card-title">'+ico('log')+'运行状态原始数据</div><button class="btn sm" onclick="refreshData()">刷新</button></div><div class="card-body"><details open><summary>/api/status</summary><pre>'+esc(JSON.stringify(s,null,2))+'</pre></details></div></div></div>';
+}
+function pageSites(){
+  $('pageDesc').textContent='按域名将 HTTP 请求转发到后端服务，支持 WAF 与 IP 过滤';
+  $('pageActions').innerHTML='<button class="btn primary" onclick="openForm(\'site\')">'+ico('plus')+'新建站点</button>';
+  const rows=C.sites.map(s=>'<tr><td class="mono">'+esc(s.id)+'</td><td>'+esc((s.domains||[]).join(', '))+'</td><td class="mono">'+esc(s.backend)+'</td><td>'+(s.waf_mode&&s.waf_mode!=='off'?'<span class="tag amber">'+esc(s.waf_mode)+'</span>':'<span class="tag gray">off</span>')+'</td><td><div class="ops">'+delBtn('/sites/'+encodeURIComponent(s.id))+'</div></td></tr>');
+  $('pageBody').innerHTML='<div class="card"><div class="card-head"><div class="card-title">'+ico('server')+'站点列表</div><span class="card-desc">共 '+C.sites.length+' 条</span></div>'+table(['ID','域名','后端','WAF','操作'],rows,'还没有站点，点击右上角新建')+'</div><p class="help">站点级 WAF 配置集与 IP 黑白名单请通过编辑 gately.json 设置 waf_profile / waf_mode / allowed_ips / denied_ips。</p>';
+}
+function pageCerts(){
+  $('pageDesc').textContent='静态 PEM 证书，可绑定到监听器提供 HTTPS';
+  $('pageActions').innerHTML='<button class="btn primary" onclick="openForm(\'cert\')">'+ico('plus')+'添加证书</button>';
+  const rows=C.certs.map(c=>'<tr><td class="mono">'+esc(c.id)+'</td><td class="mono">'+esc(short(c.cert_path))+'</td><td class="mono">'+esc(short(c.key_path))+'</td><td><div class="ops">'+delBtn('/certs/'+encodeURIComponent(c.id))+'</div></td></tr>');
+  $('pageBody').innerHTML='<div class="card"><div class="card-head"><div class="card-title">'+ico('key')+'TLS 证书</div><span class="card-desc">共 '+C.certs.length+' 条</span></div>'+table(['ID','证书路径','私钥路径','操作'],rows,'暂无静态证书')+'</div>';
+}
+function pageAcme(){
+  $('pageDesc').textContent='通过 HTTP-01 挑战自动签发与续期证书（需要 80 端口可达）';
+  $('pageActions').innerHTML='<button class="btn primary" onclick="openForm(\'acme\')">'+ico('plus')+'新建任务</button>';
+  const st=C.status&&C.status.acme_tasks||0;
+  const rows=C.acme.map(a=>'<tr><td class="mono">'+esc(a.id)+'</td><td>'+esc((a.domains||[]).join(', '))+'</td><td class="mono">'+esc(a.cert_id||'-')+'</td><td>'+(a.last_error?'<span class="tag red">错误</span>':'<span class="tag green">正常</span>')+'</td><td><div class="ops">'+runBtn('/acme/'+encodeURIComponent(a.id)+'/run','签发')+delBtn('/acme/'+encodeURIComponent(a.id))+'</div></td></tr>');
+  $('pageBody').innerHTML='<div class="card"><div class="card-head"><div class="card-title">'+ico('key')+'ACME 任务</div><span class="card-desc">配置中 '+st+' 条</span></div>'+table(['ID','域名','证书 ID','状态','操作'],rows,'暂无 ACME 任务')+'</div>';
+}
+function pageDdns(){
+  $('pageDesc').textContent='Cloudflare A / AAAA 记录更新，IP 可引用 STUN 变量';
+  $('pageActions').innerHTML='<button class="btn primary" onclick="openForm(\'ddns\')">'+ico('plus')+'新建任务</button>';
+  const ss=(C.status&&C.status.ddns_status)||{};
+  const rows=C.ddns.map(t=>{const s=ss[t.id]||{};const type=t.ip_source&&t.ip_source.kind;
+   return '<tr><td class="mono">'+esc(t.id)+'</td><td>'+esc(t.name)+'</td><td><span class="tag">'+esc(t.record_type)+'</span></td><td>'+(t.enabled?'<span class="tag green">启用</span>':'<span class="tag gray">停用</span>')+'</td><td class="mono">'+esc(s.last_ip||t.last_ip||'-')+'</td><td>'+(s.last_error?'<span class="tag red">'+esc(short(s.last_error))+'</span>':'-')+'</td><td>'+(type==='url'?'URL':'静态')+'</td><td><div class="ops">'+runBtn('/ddns/'+encodeURIComponent(t.id)+'/run','执行')+delBtn('/ddns/'+encodeURIComponent(t.id))+'</div></td></tr>'});
+  $('pageBody').innerHTML='<div class="card"><div class="card-head"><div class="card-title">'+ico('globe')+'DDNS 任务</div><span class="card-desc">共 '+C.ddns.length+' 条</span></div>'+table(['ID','域名','类型','状态','最近 IP','错误','IP 来源','操作'],rows,'暂无 DDNS 任务')+'</div><p class="help">URL 来源支持 <code>{STUN_id_ADDR}</code> 与 <code>{STUN_id_PORT}</code>，端口变化后下一次更新自动使用新值。</p>';
+}
+function pageWaf(){
+  $('pageDesc').textContent='正则规则式 WAF，支持检测/拦截模式与配置集';
+  $('pageActions').innerHTML='<button class="btn" onclick="openForm(\'profile\')">'+ico('plus')+'新建配置集</button><button class="btn primary" onclick="openForm(\'waf\')">'+ico('plus')+'新建规则</button>';
+  const rows=C.waf.map(r=>'<tr><td class="mono">'+esc(r.id)+'</td><td>'+esc(r.name)+'</td><td class="mono">'+esc(short(r.pattern))+'</td><td>'+esc(r.target)+'</td><td>'+(r.action==='deny'?'<span class="tag red">拦截</span>':'<span class="tag amber">记录</span>')+'</td><td>'+(r.enabled?'<span class="tag green">启用</span>':'<span class="tag gray">停用</span>')+'</td><td>'+delBtn('/waf/rules/'+encodeURIComponent(r.id))+'</td></tr>');
+  const prows=C.profiles.map(p=>'<tr><td class="mono">'+esc(p.id)+'</td><td>'+esc(p.name)+'</td><td>'+esc((p.rule_ids||[]).join(', '))+'</td><td><span class="tag">'+esc(p.mode)+'</span></td><td>'+delBtn('/waf/profiles/'+encodeURIComponent(p.id))+'</td></tr>');
+  $('pageBody').innerHTML='<div class="card"><div class="card-head"><div class="card-title">'+ico('shield')+'规则</div><span class="card-desc">共 '+C.waf.length+' 条</span></div>'+table(['ID','名称','正则','目标','动作','状态','操作'],rows,'暂无规则')+'</div><div class="card"><div class="card-head"><div class="card-title">'+ico('shield')+'配置集</div><span class="card-desc">共 '+C.profiles.length+' 条</span></div>'+table(['ID','名称','规则 ID','模式','操作'],prows,'暂无配置集')+'</div><p class="help">这是内置正则引擎，不是 Coraza / OWASP CRS。站点通过 waf_profile 与 waf_mode 引用配置集。</p>';
+}
+function pageJail(){
+  $('pageDesc').textContent='fail2ban 式日志监狱，可把封禁写入 nftables / iptables';
+  $('pageActions').innerHTML='<button class="btn primary" onclick="openForm(\'jail\')">'+ico('settings')+'修改配置</button>';
+  const j=C.config&&C.config.jail||{};
+  const rows=(C.bans||[]).map(b=>'<tr><td class="mono">'+esc(typeof b==='string'?b:JSON.stringify(b))+'</td></tr>');
+  $('pageBody').innerHTML='<div class="card"><div class="card-head"><div class="card-title">'+ico('shield')+'当前配置</div></div><div class="card-body"><div class="grid">'+
+   '<div><div class="kv-k">状态</div><div class="kv-v">'+(j.enabled?'<span class="tag green">启用</span>':'<span class="tag gray">停用</span>')+'</div></div>'+
+   '<div><div class="kv-k">后端</div><div class="kv-v mono">'+esc(j.backend||'none')+'</div></div>'+
+   '<div><div class="kv-k">日志文件</div><div class="kv-v mono">'+esc(short(j.log_path||'-'))+'</div></div>'+
+   '<div><div class="kv-k">阈值</div><div class="kv-v">'+(j.max_failures??'-')+' 次 / '+(j.window_secs??'-')+' 秒</div></div>'+
+   '</div><div class="help">失败正则：'+esc((j.patterns||[]).join(' | ')||'未设置')+'</div></div></div>'+
+   '<div class="card"><div class="card-head"><div class="card-title">'+ico('shield')+'已封禁 IP</div><span class="card-desc">共 '+((C.bans||[]).length)+' 条</span></div>'+(C.bans&&C.bans.length?table(['IP / 规则'],rows):'<div class="empty">当前没有封禁记录</div>')+'</div>';
+}
+function pageTunnels(){
+  $('pageDesc').textContent='托管 frpc、cloudflared 等外部二进制，异常退出自动重启';
+  $('pageActions').innerHTML='<button class="btn primary" onclick="openForm(\'tunnel\')">'+ico('plus')+'新建任务</button>';
+  const ss=(C.status&&C.status.tunnels)||{};
+  const rows=C.tunnels.map(t=>{const s=ss[t.id]||{};return '<tr><td class="mono">'+esc(t.id)+'</td><td>'+esc(t.name)+'</td><td class="mono">'+esc(short(t.binary))+'</td><td>'+(s.running?'<span class="tag green">运行 pid '+(s.pid||'-')+'</span>':'<span class="tag gray">已停止</span>')+'</td><td>'+(s.last_error?'<span class="tag red">'+esc(short(s.last_error))+'</span>':'-')+'</td><td>'+(t.enabled?'<span class="tag">启用</span>':'<span class="tag gray">停用</span>')+'</td><td>'+delBtn('/tunnels/'+encodeURIComponent(t.id))+'</td></tr>'});
+  $('pageBody').innerHTML='<div class="card"><div class="card-head"><div class="card-title">'+ico('tunnel')+'隧道任务</div><span class="card-desc">共 '+C.tunnels.length+' 条</span></div>'+table(['ID','名称','可执行文件','状态','错误','配置','操作'],rows,'暂无隧道任务')+'</div>';
+}
+function pageStun(){
+  $('pageDesc').textContent='RFC 5389 公网地址探测，结果可供 DDNS 引用';
+  $('pageActions').innerHTML='<button class="btn primary" onclick="openForm(\'stun\')">'+ico('plus')+'新建任务</button>';
+  const ss=(C.status&&C.status.stun)||{};
+  const rows=C.stun.map(t=>{const s=ss[t.id]||{};return '<tr><td class="mono">'+esc(t.id)+'</td><td class="mono">'+esc(t.server)+'</td><td class="mono">'+esc(s.public_ip||'-')+'</td><td class="mono">'+esc(s.public_port||'-')+'</td><td>'+(s.last_error?'<span class="tag red">'+esc(short(s.last_error))+'</span>':'<span class="tag green">正常</span>')+'</td><td>'+delBtn('/stun/'+encodeURIComponent(t.id))+'</td></tr>'});
+  $('pageBody').innerHTML='<div class="card"><div class="card-head"><div class="card-title">'+ico('globe')+'STUN 任务</div><span class="card-desc">共 '+C.stun.length+' 条</span></div>'+table(['ID','服务器','公网 IP','公网端口','状态','操作'],rows,'暂无 STUN 任务')+'</div>';
+}
+function pageHistory(){
+  $('pageDesc').textContent='每次配置保存自动生成快照，可查看差异并回滚';
+  $('pageActions').innerHTML='<button class="btn" onclick="refreshData()">'+ico('history')+'刷新</button>';
+  const rows=C.history.map(id=>'<tr><td class="mono">'+esc(id)+'</td><td><div class="ops"><button class="btn sm" onclick="showDiff(\''+esc(id)+'\')">查看 diff</button><button class="btn sm" onclick="rollback(\''+esc(id)+'\')">回滚</button></div></td></tr>');
+  $('pageBody').innerHTML='<div class="card"><div class="card-head"><div class="card-title">'+ico('history')+'配置快照</div><span class="card-desc">共 '+C.history.length+' 份</span></div>'+table(['快照 ID','操作'],rows,'还没有配置快照')+'</div><div class="card"><div class="card-head"><div class="card-title">差异 / 结果</div></div><div class="card-body"><pre id="diffOut">选择一份快照查看差异</pre></div></div>';
+}
+function pageImport(){
+  $('pageDesc').textContent='从 JSON 备份、ZIP 包或 Lucky 明文配置导入';
+  $('pageActions').innerHTML='<button class="btn primary" onclick="openForm(\'import\')">'+ico('import')+'开始导入</button>';
+  $('pageBody').innerHTML='<div class="card"><div class="card-head"><div class="card-title">'+ico('import')+'导入说明</div></div><div class="card-body"><p class="help" style="margin-top:0">支持三种来源：<b>JSON 备份</b>（本程序 <code>/api/config</code> 导出的结构）、<b>ZIP 备份</b>、<b>Lucky .lkcf</b>（仅明文结构可解析）。加密的 .lkcf 会给出明确错误，不会静默跳过。导入的规则默认停用，确认无误后再启用。</p><pre id="importOut">尚未导入</pre></div></div>';
+}
+function pageAuth(){
+  $('pageDesc').textContent='TOTP 二步验证与 OIDC（Authorization Code + PKCE）';
+  $('pageActions').innerHTML='<button class="btn primary" onclick="openForm(\'auth\')">'+ico('settings')+'修改认证设置</button>';
+  const a=C.config&&C.config.auth||{};
+  $('pageBody').innerHTML='<div class="card"><div class="card-head"><div class="card-title">'+ico('key')+'当前设置</div></div><div class="card-body"><div class="grid">'+
+   '<div><div class="kv-k">TOTP</div><div class="kv-v">'+(a.totp_secret?'<span class="tag green">已设置</span>':'<span class="tag gray">未设置</span>')+'</div></div>'+
+   '<div><div class="kv-k">登录要求 TOTP</div><div class="kv-v">'+(a.require_totp?'<span class="tag amber">是</span>':'<span class="tag gray">否</span>')+'</div></div>'+
+   '<div><div class="kv-k">OIDC 提供商</div><div class="kv-v">'+(a.oidc||[]).length+'</div></div>'+
+   '<div><div class="kv-k">会话</div><div class="kv-v">Bearer Token</div></div>'+
+   '</div></div></div><p class="help">Passkey / WebAuthn 与 HTTP/3 在 gately-rs 中未实现，不会以假实现冒充完成。</p>';
+}
+
+const PAGES_FN={overview:pageOverview,sites:pageSites,certs:pageCerts,acme:pageAcme,ddns:pageDdns,waf:pageWaf,jail:pageJail,tunnels:pageTunnels,stun:pageStun,history:pageHistory,import:pageImport,auth:pageAuth};
+function renderPage(){$('pageTitle').textContent=PAGES[current]||current;(PAGES_FN[current]||pageOverview)()}
+
+const FORMS={
+ site:{title:'新建 Web 站点',fields:[{k:'domains',l:'域名（逗号分隔）',ph:'a.example.com, b.example.com',req:1},{k:'backend',l:'后端地址',ph:'http://127.0.0.1:3000',req:1},{k:'listener',l:'监听器 ID',ph:'留空使用默认'}],submit:v=>api('/sites',{method:'POST',body:{domains:split(v.domains),backend:v.backend,listener:v.listener||null}})},
+ cert:{title:'添加静态证书',fields:[{k:'id',l:'证书 ID',req:1},{k:'cert_path',l:'证书 PEM 路径',req:1},{k:'key_path',l:'私钥 PEM 路径',req:1}],submit:v=>api('/certs',{method:'POST',body:v})},
+ acme:{title:'新建 ACME 任务',fields:[{k:'id',l:'任务 ID',req:1},{k:'domains',l:'域名（逗号分隔）',req:1},{k:'email',l:'联系邮箱',req:1},{k:'cert_id',l:'证书 ID',req:1}],submit:v=>api('/acme',{method:'POST',body:{id:v.id,domains:split(v.domains),email:v.email,provider:'letsencrypt',directory:'',challenge:'http-01',cert_id:v.cert_id,auto_renew:true,renew_before_days:30}})},
+ ddns:{title:'新建 DDNS 任务',fields:[{k:'name',l:'域名',ph:'nas.example.com',req:1},{k:'zone_id',l:'Cloudflare Zone ID',req:1},{k:'api_token',l:'API Token',t:'password',req:1},{k:'record_type',l:'记录类型',t:'select',opts:['A','AAAA']},{k:'kind',l:'IP 来源',t:'select',opts:['static','url']},{k:'value',l:'IP 或 URL',ph:'1.2.3.4 或 {STUN_x_ADDR}',req:1}],submit:v=>api('/ddns',{method:'POST',body:{enabled:true,provider:'cloudflare',zone_id:v.zone_id,api_token:v.api_token,name:v.name,record_type:v.record_type,ip_source:v.kind==='static'?{kind:'static',ip:v.value}:{kind:'url',url:v.value},interval_secs:300}})},
+ waf:{title:'新建 WAF 规则',fields:[{k:'id',l:'规则 ID',req:1},{k:'name',l:'名称',req:1},{k:'pattern',l:'正则表达式',ph:'\\.\\./',req:1},{k:'target',l:'检查目标',t:'select',opts:['path','query','user_agent','body']},{k:'action',l:'动作',t:'select',opts:['deny','log']}],submit:v=>api('/waf/rules',{method:'POST',body:{id:v.id,name:v.name,pattern:v.pattern,target:v.target,action:v.action,enabled:true}})},
+ profile:{title:'新建 WAF 配置集',fields:[{k:'id',l:'配置集 ID',req:1},{k:'name',l:'名称',req:1},{k:'rule_ids',l:'规则 ID（逗号分隔）',ph:'rule1,rule2'},{k:'mode',l:'模式',t:'select',opts:['block','detect']}],submit:v=>api('/waf/profiles',{method:'POST',body:{id:v.id,name:v.name,rule_ids:split(v.rule_ids),mode:v.mode}})},
+ tunnel:{title:'新建隧道任务',fields:[{k:'id',l:'任务 ID',req:1},{k:'name',l:'名称',req:1},{k:'binary',l:'可执行文件',ph:'/usr/bin/frpc',req:1},{k:'args',l:'启动参数（空格分隔）',ph:'-c /etc/frpc.toml'}],submit:v=>api('/tunnels',{method:'POST',body:{id:v.id,name:v.name,binary:v.binary,args:String(v.args||'').split(/\s+/).filter(Boolean),workdir:null,env:{},enabled:true,auto_restart:true}})},
+ stun:{title:'新建 STUN 任务',fields:[{k:'id',l:'任务 ID',req:1},{k:'server',l:'STUN 服务器',ph:'stun.l.google.com:19302',req:1}],submit:v=>api('/stun',{method:'POST',body:{id:v.id,server:v.server,enabled:true,interval_secs:300}})},
+ import:{title:'导入配置',fields:[{k:'paths',l:'文件路径（逗号分隔）',ph:'/path/backup.json, /path/lucky.lkcf',req:1},{k:'keep_enabled',l:'保留原启用状态',t:'checkbox'}],submit:v=>api('/import',{method:'POST',body:{paths:split(v.paths),keep_enabled:!!v.keep_enabled}}).then(r=>{const o=$('importOut');if(o)o.textContent=JSON.stringify(r,null,2);return r})},
+ jail:{title:'修改入侵防护',fields:[{k:'enabled',l:'启用',t:'checkbox'},{k:'log_path',l:'日志文件路径',ph:'/var/log/auth.log'},{k:'patterns',l:'失败正则（逗号分隔）',ph:'Failed password, Invalid user'},{k:'max_failures',l:'失败阈值',t:'number'},{k:'window_secs',l:'统计窗口（秒）',t:'number'},{k:'ban_secs',l:'封禁时长（秒）',t:'number'},{k:'backend',l:'封禁后端',t:'select',opts:['none','nftables','iptables']}],fill:cfg=>cfg&&cfg.jail?{...cfg.jail,patterns:(cfg.jail.patterns||[]).join(',')}:{},submit:v=>api('/jail',{method:'POST',body:{enabled:!!v.enabled,log_path:v.log_path,patterns:split(v.patterns),max_failures:+v.max_failures||5,window_secs:+v.window_secs||600,ban_secs:+v.ban_secs||3600,whitelist:[],backend:v.backend,nft_table:'gately',nft_chain:'gately_jail'}})},
+ auth:{title:'修改认证设置',fields:[{k:'totp_secret',l:'TOTP Base32 密钥',ph:'JBSWY3DPEHPK3PXP'},{k:'require_totp',l:'登录必须输入 TOTP',t:'checkbox'},{k:'oidc_json',l:'OIDC 提供商 JSON',t:'textarea',ph:'[]'}],fill:cfg=>cfg&&cfg.auth?{totp_secret:cfg.auth.totp_secret||'',require_totp:!!cfg.auth.require_totp,oidc_json:JSON.stringify(cfg.auth.oidc||[],null,2)}:{oidc_json:'[]'},submit:v=>{let oidc=[];try{oidc=JSON.parse(v.oidc_json||'[]')}catch{throw new Error('OIDC JSON 无效')}return api('/auth',{method:'POST',body:{totp_secret:v.totp_secret||null,require_totp:!!v.require_totp,oidc,oidc_allowed_users:[]}})}}
+};
+function fieldHTML(f,v){
+  const val=v===undefined||v===null?'':String(v);
+  if(f.t==='checkbox')return '<div class="field inline"><input type="checkbox" id="f_'+f.k+'" '+(v?'checked':'')+'><label for="f_'+f.k+'">'+esc(f.l)+'</label></div>';
+  let control;
+  if(f.t==='select')control='<select id="f_'+f.k+'">'+f.opts.map(o=>'<option '+(val===o?'selected':'')+'>'+esc(o)+'</option>').join('')+'</select>';
+  else if(f.t==='textarea')control='<textarea id="f_'+f.k+'" placeholder="'+esc(f.ph||'')+'">'+esc(val)+'</textarea>';
+  else control='<input id="f_'+f.k+'" type="'+(f.t||'text')+'" value="'+esc(val)+'" placeholder="'+esc(f.ph||'')+'" '+(f.req?'required':'')+'>';
+  return '<div class="field"><label for="f_'+f.k+'">'+esc(f.l)+'</label>'+control+'</div>';
+}
+function closeModal(){$('modal').classList.remove('show')}
+function openForm(name){
+  const f=FORMS[name];const vals=f.fill?f.fill(C.config):{};
+  $('dlgTitle').textContent=f.title;
+  $('dlgBody').innerHTML='<form id="dlgForm">'+f.fields.map(x=>fieldHTML(x,vals[x.k])).join('')+'</form>';
+  $('dlgFoot').innerHTML='<button class="btn" onclick="closeModal()">取消</button><button class="btn primary" id="dlgSave">保存</button>';
+  $('modal').classList.add('show');
+  $('dlgSave').onclick=async()=>{
+    const form=$('dlgForm');if(!form.reportValidity())return;
+    const v={};for(const x of f.fields)v[x.k]=x.t==='checkbox'?$('f_'+x.k).checked:$('f_'+x.k).value;
+    try{await f.submit(v);closeModal();toast('保存成功','ok');await refreshData()}catch(e){toast('保存失败：'+e.message,'err')}
+  };
+  const first=$('dlgForm').querySelector('input,select,textarea');if(first)first.focus();
+}
+function confirmDo(text,fn){
+  $('dlgTitle').textContent='请确认';$('dlgBody').innerHTML='<p style="margin:0;line-height:1.7">'+esc(text)+'</p>';
+  $('dlgFoot').innerHTML='<button class="btn" onclick="closeModal()">取消</button><button class="btn danger" id="dlgYes">确定</button>';
+  $('modal').classList.add('show');$('dlgYes').onclick=async()=>{closeModal();try{await fn();toast('操作成功','ok');await refreshData()}catch(e){toast('操作失败：'+e.message,'err')}};
+}
+window.delItem=path=>confirmDo('确认删除 '+path+' ？此操作不可撤销。',()=>api(path,{method:'DELETE'}));
+window.runItem=(path,label)=>api(path,{method:'POST'}).then(r=>toast(label+' 完成：'+JSON.stringify(r),'ok')).catch(e=>toast(label+' 失败：'+e.message,'err')).then(refreshData);
+window.openForm=openForm;window.closeModal=closeModal;window.go=go;
+window.reloadCfg=()=>api('/config/reload',{method:'POST'}).then(()=>{toast('配置已从磁盘重载','ok');return refreshData()}).catch(e=>toast(e.message,'err'));
+window.showDiff=async id=>{try{$('diffOut').textContent=await api('/history/'+encodeURIComponent(id)+'/diff')}catch(e){toast(e.message,'err')}};
+window.rollback=id=>confirmDo('确认回滚到快照 '+id+' ？当前配置会被覆盖。',()=>api('/history/'+encodeURIComponent(id)+'/rollback',{method:'POST'}));
+
+async function refreshData(){
+  if(!token)return;
+  try{
+    const s=await api('/status');C.status=s;
+    const [sites,certs,ddns,acme,waf,profiles,tunnels,stun,history,bans]=await Promise.all([
+      api('/sites'),api('/certs'),api('/ddns'),api('/acme'),api('/waf/rules'),api('/waf/profiles'),
+      api('/tunnels'),api('/stun'),api('/history'),api('/jail/bans')]);
+    Object.assign(C,{sites,certs,ddns,acme,waf,profiles,tunnels,stun,history,bans});
+    try{C.config=await api('/config')}catch{}
+    $('app').style.display='';$('login').classList.add('hide');
+    $('sideVer').textContent='v'+(s.version||'0.2.0');
+    renderPage();
+  }catch(e){
+    if(String(e.message).includes('401')){showLogin();return}
+    toast('刷新失败：'+e.message,'err');
   }
 }
+function showLogin(){$('app').style.display='none';$('login').classList.remove('hide');$('lgPass').focus()}
+async function doLogin(){
+  try{
+    const d=await api('/login',{method:'POST',body:{password:$('lgPass').value}});
+    token=d.token;localStorage.setItem('gately_token',token);
+    const code=$('lgTotp').value.trim();if(code)await api('/login/totp',{method:'POST',body:{code}});
+    $('lgPass').value='';$('lgTotp').value='';toast('登录成功','ok');await refreshData();
+  }catch(e){toast('登录失败：'+e.message,'err')}
+}
 
-window.del = async path => { if (confirm('删除 '+path+'?')) { try { await api(path, {method:'DELETE'}); refresh(); } catch(e) { alert('失败：'+e.message); } } };
-window.runTask = async (path, label) => { try { const r = await api(path, {method:'POST'}); alert(label+' 完成：'+JSON.stringify(r)); } catch(e) { alert(label+' 失败：'+e.message); } refresh(); };
-
-$('loginBtn').onclick = async () => {
-  try {
-    const d = await api('/login', {method:'POST', body:{password:$('password').value}});
-    token = d.token; localStorage.setItem('gately_token', token);
-    if ($('totp').value.trim()) {
-      await api('/login/totp', {method:'POST', body:{code:$('totp').value.trim()}});
-    }
-    $('who').textContent = '已登录'; refresh();
-  } catch (e) { alert('登录失败：' + e.message); }
-};
-$('refreshBtn').onclick = refresh;
-$('reloadBtn').onclick = async () => { try { await api('/config/reload',{method:'POST'}); refresh(); } catch(e) { alert(e.message); } };
-
-$('addSiteBtn').onclick = async () => {
-  try { await api('/sites',{method:'POST',body:{domains:$('siteDomains').value.split(',').map(x=>x.trim()).filter(Boolean),backend:$('siteBackend').value.trim(),listener:null}}); refresh(); } catch(e){ alert(e.message); }
-};
-$('addCertBtn').onclick = async () => {
-  try { await api('/certs',{method:'POST',body:{id:$('certId').value.trim(),cert_path:$('certPath').value.trim(),key_path:$('keyPath').value.trim()}}); refresh(); } catch(e){ alert(e.message); }
-};
-$('addAcmeBtn').onclick = async () => {
-  try { await api('/acme',{method:'POST',body:{id:$('acmeId').value.trim(),domains:$('acmeDomains').value.split(',').map(x=>x.trim()).filter(Boolean),email:$('acmeEmail').value.trim(),provider:'letsencrypt',directory:'',challenge:'http-01',cert_id:$('acmeCertId').value.trim(),auto_renew:true,renew_before_days:30}}); refresh(); } catch(e){ alert(e.message); }
-};
-$('addDdnsBtn').onclick = async () => {
-  const value = $('ddnsValue').value.trim(), kind = $('ddnsKind').value;
-  try { await api('/ddns',{method:'POST',body:{enabled:true,provider:'cloudflare',zone_id:$('ddnsZone').value.trim(),api_token:$('ddnsToken').value.trim(),name:$('ddnsName').value.trim(),record_type:$('ddnsType').value,ip_source:kind==='static'?{kind:'static',ip:value}:{kind:'url',url:value},interval_secs:300}}); refresh(); } catch(e){ alert(e.message); }
-};
-$('addWafBtn').onclick = async () => {
-  try { await api('/waf/rules',{method:'POST',body:{id:$('wafId').value.trim(),name:$('wafName').value.trim(),pattern:$('wafPattern').value, target:$('wafTarget').value,action:$('wafAction').value,enabled:true}}); refresh(); } catch(e){ alert(e.message); }
-};
-$('saveJailBtn').onclick = async () => {
-  try { await api('/jail',{method:'POST',body:{enabled:$('jailEnabled').checked,log_path:$('jailLog').value.trim(),patterns:$('jailPatterns').value.split(',').map(x=>x.trim()).filter(Boolean),max_failures:Number($('jailMax').value)||5,window_secs:600,ban_secs:3600,whitelist:[],backend:$('jailBackend').value,nft_table:'gately',nft_chain:'gately_jail'}}); refresh(); } catch(e){ alert(e.message); }
-};
-$('addTunBtn').onclick = async () => {
-  try { await api('/tunnels',{method:'POST',body:{id:$('tunId').value.trim(),name:$('tunName').value.trim(),binary:$('tunBinary').value.trim(),args:$('tunArgs').value.split(/\s+/).filter(Boolean),workdir:null,env:{},enabled:true,auto_restart:true}}); refresh(); } catch(e){ alert(e.message); }
-};
-$('addStunBtn').onclick = async () => {
-  try { await api('/stun',{method:'POST',body:{id:$('stunId').value.trim(),server:$('stunServer').value.trim(),enabled:true,interval_secs:300}}); refresh(); } catch(e){ alert(e.message); }
-};
-$('saveAuthBtn').onclick = async () => {
-  let oidc = []; try { oidc = JSON.parse($('oidcJson').value || '[]'); } catch(e) { alert('OIDC JSON 无效'); return; }
-  try { await api('/auth',{method:'POST',body:{totp_secret:$('totpSecret').value.trim()||null,require_totp:$('requireTotp').checked,oidc,oidc_allowed_users:[]}}); refresh(); } catch(e){ alert(e.message); }
-};
-
-$('historyBtn').onclick = async () => {
-  try {
-    const ids = await api('/history');
-    $('history').innerHTML = rows(ids, id => `<div class="row"><code>${esc(id)}</code><button onclick="showDiff('${esc(id)}')">diff</button><button onclick="rollback('${esc(id)}')">回滚</button></div>`);
-  } catch(e) { alert(e.message); }
-};
-window.showDiff = async id => { try { $('status').textContent = await api('/history/'+encodeURIComponent(id)+'/diff'); } catch(e){ alert(e.message); } };
-window.rollback = async id => { if (!confirm('回滚到 '+id+'?')) return; try { await api('/history/'+encodeURIComponent(id)+'/rollback',{method:'POST'}); refresh(); } catch(e){ alert(e.message); } };
-$('importBtn').onclick = async () => {
-  try {
-    const r = await api('/import',{method:'POST',body:{paths:$('importPaths').value.split(',').map(x=>x.trim()).filter(Boolean),keep_enabled:$('keepEnabled').checked}});
-    $('importResult').textContent = JSON.stringify(r, null, 2); refresh();
-  } catch(e) { alert(e.message); }
-};
-
-fetch('/api/login/oidc/providers').then(r=>r.json()).then(ps => {
-  $('oidc').innerHTML = ps.map(p => `<button onclick="location.href='/api/login/oidc/start?provider=${encodeURIComponent(p.id)}'">${esc(p.name)} 登录</button>`).join('');
+$('lgBtn').onclick=doLogin;
+$('lgPass').addEventListener('keydown',e=>{if(e.key==='Enter')doLogin()});
+$('lgTotp').addEventListener('keydown',e=>{if(e.key==='Enter')doLogin()});
+$('refreshBtn').onclick=refreshData;
+$('navSearch').oninput=e=>renderNav(e.target.value);
+$('collapseBtn').onclick=()=>{document.documentElement.classList.toggle('collapsed');setTimeout(()=>renderNav($('navSearch').value),210)};
+$('menuBtn').onclick=()=>$('aside').classList.toggle('open');
+$('dlgClose').onclick=closeModal;
+$('modal').addEventListener('click',e=>{if(e.target===$('modal'))closeModal()});
+$('themeBtn').onclick=()=>{const dark=document.documentElement.classList.toggle('dark');localStorage.setItem('gately_theme',dark?'dark':'light')};
+$('userBtn').onclick=()=>confirmDo('退出登录并清除本地 Token？',()=>{token='';localStorage.removeItem('gately_token');showLogin();return Promise.resolve()});
+if(localStorage.getItem('gately_theme')==='dark')document.documentElement.classList.add('dark');
+fetch('/api/login/oidc/providers').then(r=>r.json()).then(ps=>{
+  if(Array.isArray(ps)&&ps.length)$('lgOidc').innerHTML=ps.map(p=>'<button class="btn sm" onclick="location.href=\'/api/login/oidc/start?provider='+encodeURIComponent(p.id)+'\'">'+esc(p.name)+' 登录</button>').join('');
 }).catch(()=>{});
-if (token) refresh();
+const p=new URLSearchParams(location.search);
+if(p.get('oidc_code'))fetch('/api/login/oidc/token',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:'code='+encodeURIComponent(p.get('oidc_code'))}).then(r=>r.json()).then(d=>{if(d.token){token=d.token;localStorage.setItem('gately_token',token)}}).catch(()=>{});
+window.addEventListener('hashchange',()=>{const id=location.hash.slice(1);if(id&&PAGES[id]&&id!==current)go(id)});
+const bootId=location.hash.slice(1);if(PAGES[bootId]&&!NAV.flatMap(g=>g.items).find(i=>i.id===bootId&&i.todo))current=bootId;
+go(current);if(token)refreshData();else showLogin();
 </script>
 </body>
 </html>
