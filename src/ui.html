@@ -255,17 +255,17 @@ function ico(n){return '<svg viewBox="0 0 24 24"><path d="'+(ICON[n]||ICON.dashb
 
 const NAV=[
  {g:'',items:[{id:'overview',name:'总览',icon:'dashboard'}]},
- {g:'网络',items:[{id:'ddns',name:'动态域名',icon:'globe'},{id:'portforward',name:'端口转发',icon:'route',todo:1},{id:'protoroute',name:'协议分流',icon:'route',todo:1}]},
- {g:'安全',items:[{id:'waf',name:'WAF 规则',icon:'shield'},{id:'jail',name:'入侵防护',icon:'shield'},{id:'knock',name:'端口敲门',icon:'key',todo:1}]},
- {g:'Web 服务',items:[{id:'sites',name:'Web 站点',icon:'server'},{id:'certs',name:'TLS 证书',icon:'key'},{id:'acme',name:'ACME 证书',icon:'key'},{id:'topology',name:'网络拓扑',icon:'route',todo:1}]},
- {g:'隧道',items:[{id:'tunnels',name:'隧道托管',icon:'tunnel'},{id:'stun',name:'STUN 探测',icon:'globe'},{id:'mesh',name:'组网管理',icon:'tunnel',todo:1}]},
- {g:'系统',items:[{id:'history',name:'配置历史',icon:'history'},{id:'import',name:'导入迁移',icon:'import'},{id:'auth',name:'认证安全',icon:'key'},{id:'logs',name:'日志审计',icon:'log',todo:1}]}
+ {g:'网络',items:[{id:'ddns',name:'动态域名',icon:'globe'},{id:'portforward',name:'端口转发',icon:'route'},{id:'protoroute',name:'协议分流',icon:'route'},{id:'stun',name:'STUN 探测',icon:'globe'}]},
+ {g:'安全',items:[{id:'waf',name:'WAF 规则',icon:'shield'},{id:'jail',name:'入侵防护',icon:'shield'},{id:'iplists',name:'IP 列表',icon:'shield'},{id:'siteusers',name:'站点用户',icon:'key'}]},
+ {g:'Web 服务',items:[{id:'sites',name:'Web 站点',icon:'server'},{id:'certs',name:'TLS 证书',icon:'key'},{id:'acme',name:'ACME 证书',icon:'key'},{id:'topology',name:'网络拓扑',icon:'route'},{id:'stats',name:'访问统计',icon:'log'}]},
+ {g:'隧道',items:[{id:'tunnels',name:'隧道托管',icon:'tunnel'}]},
+ {g:'系统',items:[{id:'notifications',name:'通知中心',icon:'log'},{id:'tasks',name:'计划任务',icon:'clock'},{id:'history',name:'配置历史',icon:'history'},{id:'audit',name:'审计日志',icon:'log'},{id:'import',name:'导入迁移',icon:'import'},{id:'auth',name:'认证安全',icon:'key'},{id:'system',name:'系统设置',icon:'settings'}]}
 ];
-const PAGES={overview:'总览',ddns:'动态域名',portforward:'端口转发',protoroute:'协议分流',waf:'WAF 规则',jail:'入侵防护',knock:'端口敲门',sites:'Web 站点',certs:'TLS 证书',acme:'ACME 证书',topology:'网络拓扑',tunnels:'隧道托管',stun:'STUN 探测',mesh:'组网管理',history:'配置历史',import:'导入迁移',auth:'认证安全',logs:'日志审计'};
+const PAGES={overview:'总览',ddns:'动态域名',portforward:'端口转发',protoroute:'协议分流',waf:'WAF 规则',jail:'入侵防护',iplists:'IP 列表',siteusers:'站点用户',sites:'Web 站点',certs:'TLS 证书',acme:'ACME 证书',topology:'网络拓扑',stats:'访问统计',tunnels:'隧道托管',stun:'STUN 探测',notifications:'通知中心',tasks:'计划任务',history:'配置历史',audit:'审计日志',import:'导入迁移',auth:'认证安全',system:'系统设置'};
 
 const $=id=>document.getElementById(id);
 let token=localStorage.getItem('gately_token')||'';
-let current='overview', C={status:null,config:null,sites:[],certs:[],ddns:[],acme:[],waf:[],profiles:[],tunnels:[],stun:[],history:[],bans:[]};
+let current='overview', C={status:null,config:null,sites:[],certs:[],ddns:[],acme:[],waf:[],profiles:[],tunnels:[],stun:[],history:[],bans:[],forwards:[],routes:[],forwardStatus:{},routeStatus:{},channels:[],rules:[],tasks:[],taskStatus:{},iplists:[],siteusers:[],audit:[],system:null,stats:null,topology:null};
 const split=v=>String(v||'').split(',').map(x=>x.trim()).filter(Boolean);
 const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const short=v=>{v=String(v??'');return v.length>34?v.slice(0,31)+'…':v};
@@ -413,22 +413,101 @@ function pageAuth(){
    '</div></div></div><p class="help">Passkey / WebAuthn 与 HTTP/3 在 gately-rs 中未实现，不会以假实现冒充完成。</p>';
 }
 
-const PAGES_FN={overview:pageOverview,sites:pageSites,certs:pageCerts,acme:pageAcme,ddns:pageDdns,waf:pageWaf,jail:pageJail,tunnels:pageTunnels,stun:pageStun,history:pageHistory,import:pageImport,auth:pageAuth};
+function pagePortForward(){
+  $('pageDesc').textContent='TCP/UDP 端口转发，支持端口段、多目标故障转移、连接限制与 PROXY 协议';
+  $('pageActions').innerHTML='<button class="btn primary" onclick="openForm(\'forward\')">'+ico('plus')+'新建规则</button>';
+  const fs=C.forwardStatus||{};
+  const rows=C.forwards.map(t=>{const s=fs[t.id]||{};return '<tr><td class="mono">'+esc(t.id)+'</td><td>'+esc(t.name)+'</td><td><span class="tag">'+esc(t.protocol.toUpperCase())+'</span></td><td class="mono">'+esc(t.listen)+'</td><td class="mono">'+esc((t.targets||[]).join(', '))+'</td><td class="mono">'+(s.connections||0)+' / '+(s.active||0)+'</td><td>'+(t.enabled?'<span class="tag green">启用</span>':'<span class="tag gray">停用</span>')+'</td><td>'+delBtn('/port-forwards/'+encodeURIComponent(t.id))+'</td></tr>'});
+  $('pageBody').innerHTML='<div class="card"><div class="card-head"><div class="card-title">'+ico('route')+'转发规则</div><span class="card-desc">共 '+C.forwards.length+' 条</span></div>'+table(['ID','名称','协议','监听','目标','连接/活动','状态','操作'],rows,'暂无端口转发')+'</div>';
+}
+function pageProtoRoute(){
+  $('pageDesc').textContent='单端口按 SNI / ALPN / Host / Minecraft / 协议特征分流，透传 TLS';
+  $('pageActions').innerHTML='<button class="btn primary" onclick="openForm(\'route\')">'+ico('plus')+'新建分流</button>';
+  const rs=C.routeStatus||{};
+  const rows=C.routes.map(t=>{const s=rs[t.id]||{};return '<tr><td class="mono">'+esc(t.id)+'</td><td>'+esc(t.name)+'</td><td class="mono">'+esc(t.listen)+'</td><td>'+(t.routes||[]).length+' 条规则</td><td class="mono">'+(s.connections||0)+'</td><td>'+(t.enabled?'<span class="tag green">启用</span>':'<span class="tag gray">停用</span>')+'</td><td>'+delBtn('/proto-routes/'+encodeURIComponent(t.id))+'</td></tr>'});
+  $('pageBody').innerHTML='<div class="card"><div class="card-head"><div class="card-title">'+ico('route')+'分流规则</div><span class="card-desc">共 '+C.routes.length+' 条</span></div>'+table(['ID','名称','监听','路由数','连接','状态','操作'],rows,'暂无协议分流')+'</div><p class="help">匹配类型：sni、alpn、http_host、minecraft、protocol（ssh/rdp/socks/tls 等）。默认目标兜底。</p>';
+}
+function pageIpLists(){
+  $('pageDesc').textContent='订阅或导入 IP/CIDR 列表，供站点与端口转发做来源过滤';
+  $('pageActions').innerHTML='<button class="btn primary" onclick="openForm(\'iplist\')">'+ico('plus')+'新建列表</button>';
+  const rows=C.iplists.map(l=>'<tr><td class="mono">'+esc(l.id)+'</td><td>'+esc(l.name)+'</td><td class="mono">'+esc(short(l.url||l.file||'-'))+'</td><td>'+(l.entries||[]).length+'</td><td>'+(l.enabled?'<span class="tag green">启用</span>':'<span class="tag gray">停用</span>')+'</td><td>'+(l.last_error?'<span class="tag red">'+esc(short(l.last_error))+'</span>':'-')+'</td><td>'+delBtn('/ip-lists/'+encodeURIComponent(l.id))+'</td></tr>');
+  $('pageBody').innerHTML='<div class="card"><div class="card-head"><div class="card-title">'+ico('shield')+'IP 列表</div><span class="card-desc">共 '+C.iplists.length+' 条</span></div>'+table(['ID','名称','来源','条目','状态','错误','操作'],rows,'暂无 IP 列表')+'</div>';
+}
+function pageSiteUsers(){
+  $('pageDesc').textContent='Web 站点共享用户，可用于 Basic / 表单认证与转发认证';
+  $('pageActions').innerHTML='<button class="btn primary" onclick="openForm(\'siteuser\')">'+ico('plus')+'新建用户</button>';
+  const rows=C.siteusers.map(u=>'<tr><td class="mono">'+esc(u.id)+'</td><td class="mono">'+esc(u.username)+'</td><td>'+esc(u.display_name||'-')+'</td><td class="mono">'+esc(u.email||'-')+'</td><td>'+(u.enabled?'<span class="tag green">启用</span>':'<span class="tag gray">停用</span>')+'</td><td>'+delBtn('/site-users/'+encodeURIComponent(u.id))+'</td></tr>');
+  $('pageBody').innerHTML='<div class="card"><div class="card-head"><div class="card-title">'+ico('key')+'用户列表</div><span class="card-desc">共 '+C.siteusers.length+' 人</span></div>'+table(['ID','用户名','显示名','邮箱','状态','操作'],rows,'暂无站点用户')+'</div>';
+}
+function pageNotifications(){
+  $('pageDesc').textContent='Webhook、Telegram、企业微信、钉钉、飞书、邮件等通知渠道与失败重试';
+  $('pageActions').innerHTML='<button class="btn" onclick="openForm(\'notifyrule\')">'+ico('plus')+'新建规则</button><button class="btn primary" onclick="openForm(\'channel\')">'+ico('plus')+'新建渠道</button>';
+  const cr=C.channels.map(c=>'<tr><td class="mono">'+esc(c.id)+'</td><td>'+esc(c.name)+'</td><td><span class="tag">'+esc(c.kind)+'</span></td><td class="mono">'+esc(short(c.endpoint||'-'))+'</td><td>'+(c.enabled?'<span class="tag green">启用</span>':'<span class="tag gray">停用</span>')+'</td><td><div class="ops"><button class="btn sm" onclick="runItem(\'/notifications/test/'+encodeURIComponent(c.id)+'\',\'测试\')">测试</button>'+delBtn('/notifications/channels/'+encodeURIComponent(c.id))+'</div></td></tr>');
+  const rr=C.rules.map(r=>'<tr><td class="mono">'+esc(r.id)+'</td><td class="mono">'+esc(r.event)+'</td><td>'+esc((r.channels||[]).join(', '))+'</td><td>'+(r.dedup_secs||0)+'s</td><td>'+delBtn('/notifications/rules/'+encodeURIComponent(r.id))+'</td></tr>');
+  $('pageBody').innerHTML='<div class="card"><div class="card-head"><div class="card-title">'+ico('log')+'渠道</div><span class="card-desc">共 '+C.channels.length+' 个</span></div>'+table(['ID','名称','类型','Endpoint','状态','操作'],cr,'暂无通知渠道')+'</div><div class="card"><div class="card-head"><div class="card-title">'+ico('log')+'规则</div></div>'+table(['ID','事件','渠道','去重','操作'],rr,'暂无规则，默认所有事件发到全部渠道')+'</div>';
+}
+function pageTasks(){
+  $('pageDesc').textContent='cron 计划任务、备份任务与执行记录';
+  $('pageActions').innerHTML='<button class="btn" onclick="api(\'/backups/run\',{method:\'POST\'}).then(r=>toast(\'备份完成：\'+JSON.stringify(r),\'ok\')).catch(e=>toast(e.message,\'err\'))">立即备份</button><button class="btn primary" onclick="openForm(\'task\')">'+ico('plus')+'新建任务</button>';
+  const ts=C.taskStatus||{};
+  const rows=C.tasks.map(t=>{const s=ts[t.id]||{};return '<tr><td class="mono">'+esc(t.id)+'</td><td>'+esc(t.name)+'</td><td class="mono">'+esc(t.cron)+'</td><td><span class="tag">'+esc(t.kind)+'</span></td><td>'+(s.last_error?'<span class="tag red">'+esc(short(s.last_error))+'</span>':'<span class="tag green">正常</span>')+'</td><td><div class="ops">'+runBtn('/tasks/'+encodeURIComponent(t.id)+'/run','执行')+delBtn('/tasks/'+encodeURIComponent(t.id))+'</div></td></tr>'});
+  $('pageBody').innerHTML='<div class="card"><div class="card-head"><div class="card-title">'+ico('clock')+'计划任务</div><span class="card-desc">共 '+C.tasks.length+' 条</span></div>'+table(['ID','名称','cron','类型','状态','操作'],rows,'暂无计划任务')+'</div>';
+}
+function pageLogs(){
+  $('pageDesc').textContent='管理操作审计日志，不记录请求体与密钥';
+  $('pageActions').innerHTML='<button class="btn" onclick="refreshData()">'+ico('history')+'刷新</button>';
+  const rows=(C.audit||[]).slice(0,200).map(a=>'<tr><td class="mono">'+esc(a.time)+'</td><td>'+esc(a.actor)+'</td><td class="mono">'+esc(a.action)+'</td><td class="mono">'+esc(short(a.target))+'</td><td>'+esc(short(a.detail||'-'))+'</td></tr>');
+  $('pageBody').innerHTML='<div class="card"><div class="card-head"><div class="card-title">'+ico('log')+'审计日志</div><span class="card-desc">最近 '+rows.length+' 条</span></div>'+table(['时间','操作者','动作','目标','详情'],rows,'暂无审计记录')+'</div>';
+}
+function pageStats(){
+  $('pageDesc').textContent='站点请求量、流量、错误与热门 IP / 路径';
+  const s=C.stats||{};
+  const card=(k,v)=>'<div class="stat"><div class="k">'+k+'</div><div class="v">'+v+'</div></div>';
+  const rows=(s.top_paths||[]).map(x=>'<tr><td class="mono">'+esc(x.key)+'</td><td>'+x.count+'</td></tr>');
+  const iprows=(s.top_ips||[]).map(x=>'<tr><td class="mono">'+esc(x.key)+'</td><td>'+x.count+'</td></tr>');
+  $('pageBody').innerHTML='<div class="stats">'+card('请求数',s.requests||0)+card('入站流量',s.bytes_in||0)+card('出站流量',s.bytes_out||0)+card('错误',s.errors||0)+'</div><div class="grid"><div class="card"><div class="card-head"><div class="card-title">热门路径</div></div>'+table(['路径','次数'],rows,'暂无数据')+'</div><div class="card"><div class="card-head"><div class="card-title">热门来源 IP</div></div>'+table(['IP','次数'],iprows,'暂无数据')+'</div></div>';
+}
+function pageTopology(){
+  $('pageDesc').textContent='监听器 → 站点 → 后端的实时拓扑与 QPS';
+  const t=C.topology||{};
+  let html='';
+  for(const l of t.listeners||[]){
+    html+='<div class="card"><div class="card-head"><div class="card-title">'+ico('route')+esc(l.name||l.id)+'</div><span class="card-desc mono">'+esc(l.listen)+'</span></div><div class="card-body"><div class="grid">';
+    for(const s of l.sites||[])html+='<div><div class="kv-k">'+esc(s.name)+'</div><div class="kv-v">'+s.requests+' <span class="mini muted">请求</span></div><div class="help mono">'+esc(s.backends&&s.backends[0]||s.backend||'-')+'</div></div>';
+    html+='</div></div></div>';
+  }
+  $('pageBody').innerHTML=html||'<div class="empty">暂无监听器拓扑</div>';
+}
+function pageSystem(){
+  $('pageDesc').textContent='系统资源、时区、DNS、模块开关与日志级别';
+  const sy=C.system||{};
+  const cfg=C.config||{};const sys=cfg.system||{};
+  $('pageBody').innerHTML='<div class="stats"><div class="stat"><div class="k">平台</div><div class="v" style="font-size:17px">'+esc((sy.platform||'-')+' / '+(sy.arch||'-'))+'</div></div><div class="stat"><div class="k">CPU</div><div class="v">'+(sy.cpu_percent||0).toFixed(1)+'%</div></div><div class="stat"><div class="k">内存</div><div class="v">'+(sy.memory_percent||0).toFixed(1)+'%</div></div><div class="stat"><div class="k">网卡</div><div class="v">'+((sy.interfaces||[]).length)+'</div></div></div><div class="card"><div class="card-head"><div class="card-title">'+ico('settings')+'配置</div></div><div class="card-body"><pre>'+esc(JSON.stringify(sys,null,2))+'</pre><p class="help">系统设置可通过 <code>PUT /api/system</code> 修改；保存前会自动创建配置快照。</p></div></div>';
+}
+const PAGES_FN={overview:pageOverview,sites:pageSites,certs:pageCerts,acme:pageAcme,ddns:pageDdns,waf:pageWaf,jail:pageJail,tunnels:pageTunnels,stun:pageStun,history:pageHistory,import:pageImport,auth:pageAuth,portforward:pagePortForward,protoroute:pageProtoRoute,iplists:pageIpLists,siteusers:pageSiteUsers,notifications:pageNotifications,tasks:pageTasks,audit:pageLogs,stats:pageStats,topology:pageTopology,system:pageSystem};
 function renderPage(){$('pageTitle').textContent=PAGES[current]||current;(PAGES_FN[current]||pageOverview)()}
 
 const FORMS={
- site:{title:'新建 Web 站点',fields:[{k:'domains',l:'域名（逗号分隔）',ph:'a.example.com, b.example.com',req:1},{k:'backend',l:'后端地址',ph:'http://127.0.0.1:3000',req:1},{k:'listener',l:'监听器 ID',ph:'留空使用默认'}],submit:v=>api('/sites',{method:'POST',body:{domains:split(v.domains),backend:v.backend,listener:v.listener||null}})},
+ site:{title:'新建 Web 站点',fields:[{k:'domains',l:'域名（逗号分隔）',ph:'a.example.com, b.example.com',req:1},{k:'backend',l:'后端地址',ph:'http://127.0.0.1:3000'},{k:'kind',l:'站点类型',t:'select',opts:['proxy','redirect','static','text','disconnect','nav']},{k:'listener',l:'监听器 ID',ph:'留空使用默认'}],submit:v=>api('/sites',{method:'POST',body:{domains:split(v.domains),backend:v.backend,kind:v.kind,listener:v.listener||null}})},
  cert:{title:'添加静态证书',fields:[{k:'id',l:'证书 ID',req:1},{k:'cert_path',l:'证书 PEM 路径',req:1},{k:'key_path',l:'私钥 PEM 路径',req:1}],submit:v=>api('/certs',{method:'POST',body:v})},
- acme:{title:'新建 ACME 任务',fields:[{k:'id',l:'任务 ID',req:1},{k:'domains',l:'域名（逗号分隔）',req:1},{k:'email',l:'联系邮箱',req:1},{k:'cert_id',l:'证书 ID',req:1}],submit:v=>api('/acme',{method:'POST',body:{id:v.id,domains:split(v.domains),email:v.email,provider:'letsencrypt',directory:'',challenge:'http-01',cert_id:v.cert_id,auto_renew:true,renew_before_days:30}})},
- ddns:{title:'新建 DDNS 任务',fields:[{k:'name',l:'域名',ph:'nas.example.com',req:1},{k:'zone_id',l:'Cloudflare Zone ID',req:1},{k:'api_token',l:'API Token',t:'password',req:1},{k:'record_type',l:'记录类型',t:'select',opts:['A','AAAA']},{k:'kind',l:'IP 来源',t:'select',opts:['static','url']},{k:'value',l:'IP 或 URL',ph:'1.2.3.4 或 {STUN_x_ADDR}',req:1}],submit:v=>api('/ddns',{method:'POST',body:{enabled:true,provider:'cloudflare',zone_id:v.zone_id,api_token:v.api_token,name:v.name,record_type:v.record_type,ip_source:v.kind==='static'?{kind:'static',ip:v.value}:{kind:'url',url:v.value},interval_secs:300}})},
- waf:{title:'新建 WAF 规则',fields:[{k:'id',l:'规则 ID',req:1},{k:'name',l:'名称',req:1},{k:'pattern',l:'正则表达式',ph:'\\.\\./',req:1},{k:'target',l:'检查目标',t:'select',opts:['path','query','user_agent','body']},{k:'action',l:'动作',t:'select',opts:['deny','log']}],submit:v=>api('/waf/rules',{method:'POST',body:{id:v.id,name:v.name,pattern:v.pattern,target:v.target,action:v.action,enabled:true}})},
+ acme:{title:'新建 ACME 任务',fields:[{k:'id',l:'任务 ID',req:1},{k:'domains',l:'域名（逗号分隔）',req:1},{k:'email',l:'联系邮箱',req:1},{k:'challenge',l:'挑战类型',t:'select',opts:['http-01','dns-01']},{k:'dns_provider',l:'DNS 服务商',t:'select',opts:['','cloudflare','hook','manual']},{k:'dns_zone',l:'DNS 区域 / Zone ID'},{k:'cert_id',l:'证书 ID',req:1}],submit:v=>api('/acme',{method:'POST',body:{id:v.id,domains:split(v.domains),email:v.email,provider:'letsencrypt',directory:'',challenge:v.challenge,dns_provider:v.dns_provider,dns_zone:v.dns_zone,dns_credentials:{},cert_id:v.cert_id,auto_renew:true,renew_before_days:30}})},
+ ddns:{title:'新建 DDNS 任务',fields:[{k:'name',l:'域名',ph:'nas.example.com',req:1},{k:'provider',l:'服务商',t:'select',opts:['cloudflare','duckdns','dynv6','godaddy','porkbun','namecheap','route53','alibaba','tencent','huawei','custom']},{k:'zone_id',l:'Zone / 域名后缀'},{k:'api_token',l:'API Token',t:'password'},{k:'record_type',l:'记录类型',t:'select',opts:['A','AAAA']},{k:'kind',l:'IP 来源',t:'select',opts:['static','url']},{k:'value',l:'IP 或 URL',ph:'1.2.3.4 或 {STUN_x_ADDR}',req:1}],submit:v=>api('/ddns',{method:'POST',body:{enabled:true,provider:v.provider,zone_id:v.zone_id,api_token:v.api_token,name:v.name,record_type:v.record_type,ip_source:v.kind==='static'?{kind:'static',ip:v.value}:{kind:'url',url:v.value},interval_secs:300,options:{},webhooks:[]}})},
+ waf:{title:'新建 WAF 规则',fields:[{k:'id',l:'规则 ID',req:1},{k:'name',l:'名称',req:1},{k:'pattern',l:'正则表达式',ph:'\\.\\./',req:1},{k:'target',l:'检查目标',t:'select',opts:['path','query','user_agent','body','header','cookie','all']},{k:'action',l:'动作',t:'select',opts:['deny','log']}],submit:v=>api('/waf/rules',{method:'POST',body:{id:v.id,name:v.name,pattern:v.pattern,target:v.target,action:v.action,enabled:true}})},
  profile:{title:'新建 WAF 配置集',fields:[{k:'id',l:'配置集 ID',req:1},{k:'name',l:'名称',req:1},{k:'rule_ids',l:'规则 ID（逗号分隔）',ph:'rule1,rule2'},{k:'mode',l:'模式',t:'select',opts:['block','detect']}],submit:v=>api('/waf/profiles',{method:'POST',body:{id:v.id,name:v.name,rule_ids:split(v.rule_ids),mode:v.mode}})},
- tunnel:{title:'新建隧道任务',fields:[{k:'id',l:'任务 ID',req:1},{k:'name',l:'名称',req:1},{k:'binary',l:'可执行文件',ph:'/usr/bin/frpc',req:1},{k:'args',l:'启动参数（空格分隔）',ph:'-c /etc/frpc.toml'}],submit:v=>api('/tunnels',{method:'POST',body:{id:v.id,name:v.name,binary:v.binary,args:String(v.args||'').split(/\s+/).filter(Boolean),workdir:null,env:{},enabled:true,auto_restart:true}})},
- stun:{title:'新建 STUN 任务',fields:[{k:'id',l:'任务 ID',req:1},{k:'server',l:'STUN 服务器',ph:'stun.l.google.com:19302',req:1}],submit:v=>api('/stun',{method:'POST',body:{id:v.id,server:v.server,enabled:true,interval_secs:300}})},
+ tunnel:{title:'新建隧道任务',fields:[{k:'id',l:'任务 ID',req:1},{k:'name',l:'名称',req:1},{k:'kind',l:'类型',t:'select',opts:['frpc','frps','cloudflared','tailscale','netbird','easytier','custom']},{k:'binary',l:'可执行文件',ph:'/usr/bin/frpc',req:1},{k:'args',l:'启动参数（空格分隔）'},{k:'install_url',l:'在线安装 URL'},],submit:v=>api('/tunnels',{method:'POST',body:{id:v.id,name:v.name,kind:v.kind,binary:v.binary,args:String(v.args||'').split(/\s+/).filter(Boolean),install_url:v.install_url,workdir:null,env:{},enabled:true,auto_restart:true,managed:!!v.install_url}})},
+ stun:{title:'新建 STUN 任务',fields:[{k:'id',l:'任务 ID',req:1},{k:'server',l:'STUN 服务器',ph:'stun.l.google.com:19302',req:1},{k:'protocol',l:'协议',t:'select',opts:['udp','tcp','both']}],submit:v=>api('/stun',{method:'POST',body:{id:v.id,server:v.server,protocol:v.protocol,enabled:true,interval_secs:300}})},
+ forward:{title:'新建端口转发',fields:[{k:'name',l:'名称',req:1},{k:'protocol',l:'协议',t:'select',opts:['tcp','udp']},{k:'listen',l:'监听地址',ph:'0.0.0.0:10000-10010',req:1},{k:'targets',l:'目标（逗号分隔，按优先级）',ph:'127.0.0.1:22, 10.0.0.2:22',req:1},{k:'max_connections',l:'最大连接数',t:'number'},{k:'proxy_protocol',l:'PROXY 协议',t:'select',opts:['off','v1','v2']}],submit:v=>api('/port-forwards',{method:'POST',body:{id:'fw_'+Date.now(),name:v.name,enabled:true,protocol:v.protocol,listen:v.listen,targets:split(v.targets),max_connections:+v.max_connections||0,idle_timeout_secs:300,proxy_protocol:v.proxy_protocol,source_allow:[],source_deny:[],source_max_connections:{}}})},
+ route:{title:'新建协议分流',fields:[{k:'name',l:'名称',req:1},{k:'listen',l:'监听地址',ph:'0.0.0.0:443',req:1},{k:'default_target',l:'默认目标',ph:'127.0.0.1:8443'},{k:'routes_json',l:'路由 JSON',t:'textarea',ph:'[{"id":"sni1","matcher":"sni","value":"example.com","target":"127.0.0.1:443","proxy_protocol":"off"}]'}],submit:v=>{let routes=[];try{routes=JSON.parse(v.routes_json||'[]')}catch{throw new Error('路由 JSON 无效')}return api('/proto-routes',{method:'POST',body:{id:'rt_'+Date.now(),name:v.name,listen:v.listen,enabled:true,routes,default_target:v.default_target,wait_timeout_secs:5,source_allow:[],source_deny:[]}})}},
+ iplist:{title:'新建 IP 列表',fields:[{k:'id',l:'列表 ID',req:1},{k:'name',l:'名称',req:1},{k:'url',l:'订阅 URL',ph:'https://example.com/ip.txt'},{k:'file',l:'本地文件路径'},{k:'refresh_secs',l:'刷新间隔（秒）',t:'number'}],submit:v=>api('/ip-lists',{method:'POST',body:{id:v.id,name:v.name,url:v.url,file:v.file,refresh_secs:+v.refresh_secs||3600,enabled:true,entries:[]}})},
+ siteuser:{title:'新建站点用户',fields:[{k:'id',l:'用户 ID',req:1},{k:'username',l:'用户名',req:1},{k:'password',l:'密码',t:'password',req:1},{k:'display_name',l:'显示名'},{k:'email',l:'邮箱'}],submit:v=>api('/site-users',{method:'POST',body:{id:v.id,username:v.username,password:v.password,display_name:v.display_name,email:v.email,groups:[],enabled:true}})},
+ channel:{title:'新建通知渠道',fields:[{k:'id',l:'渠道 ID',req:1},{k:'name',l:'名称',req:1},{k:'kind',l:'类型',t:'select',opts:['webhook','telegram','bark','ntfy','gotify','pushover','discord','slack','serverchan','pushplus','wecom','dingtalk','feishu','email','command']},{k:'endpoint',l:'Endpoint / URL',req:1},{k:'token',l:'Token',t:'password'}],submit:v=>api('/notifications/channels',{method:'POST',body:{id:v.id,name:v.name,kind:v.kind,endpoint:v.endpoint,token:v.token,extra:{},enabled:true}})},
+ notifyrule:{title:'新建通知规则',fields:[{k:'id',l:'规则 ID',req:1},{k:'event',l:'事件（支持 * 通配）',ph:'cert.*',req:1},{k:'channels',l:'渠道 ID（逗号分隔）'},{k:'dedup_secs',l:'去重秒数',t:'number'}],submit:v=>api('/notifications/rules',{method:'POST',body:{id:v.id,event:v.event,channels:split(v.channels),dedup_secs:+v.dedup_secs||0,enabled:true}})},
+ task:{title:'新建计划任务',fields:[{k:'name',l:'名称',req:1},{k:'cron',l:'cron（分 时 日 月 周）',ph:'*/5 * * * *',req:1},{k:'kind',l:'类型',t:'select',opts:['command','http']},{k:'command',l:'命令'},{k:'url',l:'HTTP URL'},{k:'method',l:'HTTP 方法',t:'select',opts:['GET','POST']}],submit:v=>api('/tasks',{method:'POST',body:{id:'task_'+Date.now(),name:v.name,cron:v.cron,kind:v.kind,command:v.command,url:v.url,method:v.method,enabled:true,timeout_secs:60}})},
  import:{title:'导入配置',fields:[{k:'paths',l:'文件路径（逗号分隔）',ph:'/path/backup.json, /path/lucky.lkcf',req:1},{k:'keep_enabled',l:'保留原启用状态',t:'checkbox'}],submit:v=>api('/import',{method:'POST',body:{paths:split(v.paths),keep_enabled:!!v.keep_enabled}}).then(r=>{const o=$('importOut');if(o)o.textContent=JSON.stringify(r,null,2);return r})},
- jail:{title:'修改入侵防护',fields:[{k:'enabled',l:'启用',t:'checkbox'},{k:'log_path',l:'日志文件路径',ph:'/var/log/auth.log'},{k:'patterns',l:'失败正则（逗号分隔）',ph:'Failed password, Invalid user'},{k:'max_failures',l:'失败阈值',t:'number'},{k:'window_secs',l:'统计窗口（秒）',t:'number'},{k:'ban_secs',l:'封禁时长（秒）',t:'number'},{k:'backend',l:'封禁后端',t:'select',opts:['none','nftables','iptables']}],fill:cfg=>cfg&&cfg.jail?{...cfg.jail,patterns:(cfg.jail.patterns||[]).join(',')}:{},submit:v=>api('/jail',{method:'POST',body:{enabled:!!v.enabled,log_path:v.log_path,patterns:split(v.patterns),max_failures:+v.max_failures||5,window_secs:+v.window_secs||600,ban_secs:+v.ban_secs||3600,whitelist:[],backend:v.backend,nft_table:'gately',nft_chain:'gately_jail'}})},
- auth:{title:'修改认证设置',fields:[{k:'totp_secret',l:'TOTP Base32 密钥',ph:'JBSWY3DPEHPK3PXP'},{k:'require_totp',l:'登录必须输入 TOTP',t:'checkbox'},{k:'oidc_json',l:'OIDC 提供商 JSON',t:'textarea',ph:'[]'}],fill:cfg=>cfg&&cfg.auth?{totp_secret:cfg.auth.totp_secret||'',require_totp:!!cfg.auth.require_totp,oidc_json:JSON.stringify(cfg.auth.oidc||[],null,2)}:{oidc_json:'[]'},submit:v=>{let oidc=[];try{oidc=JSON.parse(v.oidc_json||'[]')}catch{throw new Error('OIDC JSON 无效')}return api('/auth',{method:'POST',body:{totp_secret:v.totp_secret||null,require_totp:!!v.require_totp,oidc,oidc_allowed_users:[]}})}}
+ jail:{title:'修改入侵防护',fields:[{k:'enabled',l:'启用',t:'checkbox'},{k:'log_path',l:'日志文件路径',ph:'/var/log/auth.log'},{k:'patterns',l:'失败正则（逗号分隔）',ph:'Failed password, Invalid user'},{k:'max_failures',l:'失败阈值',t:'number'},{k:'window_secs',l:'统计窗口（秒）',t:'number'},{k:'ban_secs',l:'封禁时长（秒）',t:'number'},{k:'backend',l:'封禁后端',t:'select',opts:['none','nftables','iptables','ipset']}],fill:cfg=>cfg&&cfg.jail?{...cfg.jail,patterns:(cfg.jail.patterns||[]).join(',')}:{},submit:v=>api('/jail',{method:'POST',body:{enabled:!!v.enabled,log_path:v.log_path,patterns:split(v.patterns),max_failures:+v.max_failures||5,window_secs:+v.window_secs||600,ban_secs:+v.ban_secs||3600,whitelist:[],backend:v.backend,nft_table:'gately',nft_chain:'gately_jail',log_sources:[],trap_ports:[],permanent_bans:[]}})},
+ auth:{title:'修改认证设置',fields:[{k:'totp_secret',l:'TOTP Base32 密钥',ph:'JBSWY3DPEHPK3PXP'},{k:'require_totp',l:'登录必须输入 TOTP',t:'checkbox'},{k:'oidc_json',l:'OIDC 提供商 JSON',t:'textarea',ph:'[]'}],fill:cfg=>cfg&&cfg.auth?{totp_secret:cfg.auth.totp_secret||'',require_totp:!!cfg.auth.require_totp,oidc_json:JSON.stringify(cfg.auth.oidc||[],null,2)}:{oidc_json:'[]'},submit:v=>{let oidc=[];try{oidc=JSON.parse(v.oidc_json||'[]')}catch{throw new Error('OIDC JSON 无效')}return api('/auth',{method:'POST',body:{totp_secret:v.totp_secret||null,require_totp:!!v.require_totp,oidc,oidc_allowed_users:[],users:[],password_login:true}})}}
 };
+
 function fieldHTML(f,v){
   const val=v===undefined||v===null?'':String(v);
   if(f.t==='checkbox')return '<div class="field inline"><input type="checkbox" id="f_'+f.k+'" '+(v?'checked':'')+'><label for="f_'+f.k+'">'+esc(f.l)+'</label></div>';
@@ -468,10 +547,12 @@ async function refreshData(){
   if(!token)return;
   try{
     const s=await api('/status');C.status=s;
-    const [sites,certs,ddns,acme,waf,profiles,tunnels,stun,history,bans]=await Promise.all([
+    const [sites,certs,ddns,acme,waf,profiles,tunnels,stun,history,bans,forwards,routes,forwardStatus,routeStatus,channels,rules,tasks,taskStatus,iplists,siteusers,audit,system,stats,topology]=await Promise.all([
       api('/sites'),api('/certs'),api('/ddns'),api('/acme'),api('/waf/rules'),api('/waf/profiles'),
-      api('/tunnels'),api('/stun'),api('/history'),api('/jail/bans')]);
-    Object.assign(C,{sites,certs,ddns,acme,waf,profiles,tunnels,stun,history,bans});
+      api('/tunnels'),api('/stun'),api('/history'),api('/jail/bans'),api('/port-forwards'),api('/proto-routes'),
+      api('/port-forwards/status'),api('/proto-routes/status'),api('/notifications/channels'),api('/notifications/rules'),
+      api('/tasks'),api('/tasks/status'),api('/ip-lists'),api('/site-users'),api('/audit'),api('/system'),api('/metrics'),api('/topology')]);
+    Object.assign(C,{sites,certs,ddns,acme,waf,profiles,tunnels,stun,history,bans,forwards,routes,forwardStatus,routeStatus,channels,rules,tasks,taskStatus,iplists,siteusers,audit,system,stats,topology});
     try{C.config=await api('/config')}catch{}
     $('app').style.display='block';$('login').classList.add('hide');
     $('sideVer').textContent='v'+(s.version||'0.2.0');

@@ -1,10 +1,19 @@
 use crate::acme;
 use crate::auth_ext;
-use crate::config::{AuthConfig, CertificateConfig, Config, DdnsTask, IpSource, JailConfig, SiteConfig};
+use crate::config::{
+    ApiToken, AuthConfig, CertificateConfig, Config, DdnsTask, IpSource, JailConfig, SiteConfig,
+};
 use crate::ddns::run_and_record;
 use crate::history;
+use crate::metrics;
 use crate::migrate;
+use crate::notify;
+use crate::scheduler;
+use crate::site_ext;
 use crate::state::AppState;
+use crate::tunnel;
+use crate::waf;
+use crate::{portforward, protoroute, stun};
 use axum::extract::{Path, Request, State};
 use axum::http::header::AUTHORIZATION;
 use axum::http::StatusCode;
@@ -16,134 +25,167 @@ use chrono::Utc;
 use serde::Deserialize;
 use serde_json::{Value, json};
 use std::fs;
+use uuid::Uuid;
 
 #[derive(Debug, Deserialize)]
-pub struct LoginRequest {
-    pub password: String,
-}
-
+pub struct LoginRequest { pub password: String }
 #[derive(Debug, Deserialize)]
 pub struct SiteRequest {
-    pub domains: Vec<String>,
-    pub backend: String,
-    pub listener: Option<String>,
+    pub domains: Vec<String>, pub backend: String, pub listener: Option<String>,
+    #[serde(default)] pub kind: String,
 }
-
 #[derive(Debug, Deserialize)]
-pub struct CertRequest {
-    pub id: String,
-    pub cert_path: String,
-    pub key_path: String,
-}
-
+pub struct CertRequest { pub id: String, pub cert_path: String, pub key_path: String }
 #[derive(Debug, Deserialize)]
 pub struct DdnsRequest {
-    pub id: Option<String>,
-    pub enabled: bool,
-    pub provider: String,
-    pub zone_id: String,
-    pub api_token: String,
-    pub name: String,
-    pub record_type: String,
-    pub ip_source: Value,
+    pub id: Option<String>, pub enabled: bool, pub provider: String, pub zone_id: String,
+    pub api_token: String, pub name: String, pub record_type: String, pub ip_source: Value,
     pub interval_secs: u64,
+    #[serde(default)] pub options: std::collections::HashMap<String, String>,
+    #[serde(default)] pub webhooks: Vec<String>,
 }
-
 #[derive(Debug, Deserialize)]
-pub struct ImportRequest {
-    pub paths: Vec<String>,
-    #[serde(default)]
-    pub keep_enabled: bool,
-}
+pub struct ImportRequest { pub paths: Vec<String>, #[serde(default)] pub keep_enabled: bool }
 
-fn new_id(prefix: &str) -> String {
-    format!("{}_{}", prefix, Utc::now().timestamp_millis())
-}
-
-fn bad_request(err: impl std::fmt::Display) -> Response {
-    (StatusCode::BAD_REQUEST, err.to_string()).into_response()
-}
-
-fn internal(err: impl std::fmt::Display) -> Response {
-    (StatusCode::INTERNAL_SERVER_ERROR, err.to_string()).into_response()
-}
+fn new_id(prefix: &str) -> String { format!("{prefix}_{}", Uuid::new_v4().simple()) }
+fn bad_request(err: impl std::fmt::Display) -> Response { (StatusCode::BAD_REQUEST, err.to_string()).into_response() }
+fn internal(err: impl std::fmt::Display) -> Response { (StatusCode::INTERNAL_SERVER_ERROR, err.to_string()).into_response() }
 
 fn persist(state: &AppState, config: &Config) -> Result<(), String> {
-    if let Ok(text) = fs::read_to_string(&state.config_path) {
-        let _ = history::snapshot(&state.config_path, &text);
-    }
+    if let Ok(text) = fs::read_to_string(&state.config_path) { let _ = history::snapshot(&state.config_path, &text); }
     config.save(&state.config_path)
 }
 
+async fn authenticated_token(state: &AppState, headers: &axum::http::HeaderMap) -> Option<String> {
+    let supplied = headers.get(AUTHORIZATION).and_then(|v| v.to_str().ok())
+        .and_then(|v| v.strip_prefix("Bearer "))?.to_string();
+    let cfg = state.config.read().await;
+    if supplied == cfg.admin.token { return Some("admin".into()); }
+    cfg.admin.api_tokens.iter().find(|t| t.enabled && t.token == supplied).map(|t| t.id.clone())
+}
+
 async fn require_auth(State(state): State<AppState>, req: Request, next: Next) -> Response {
-    let expected = state.config.read().await.admin.token.clone();
-    let authorized = req.headers().get(AUTHORIZATION)
-        .and_then(|v| v.to_str().ok())
-        .map(|v| v.strip_prefix("Bearer ").unwrap_or("") == expected)
-        .unwrap_or(false);
-    if !authorized { return (StatusCode::UNAUTHORIZED, "unauthorized").into_response(); }
-    next.run(req).await
+    let actor = authenticated_token(&state, req.headers()).await;
+    match actor {
+        Some(actor) => {
+            let method = req.method().to_string();
+            let uri = req.uri().to_string();
+            let response = next.run(req).await;
+            if method != "GET" {
+                metrics::audit(&state, &actor, &method, &uri, "").await;
+            }
+            response
+        }
+        None => {
+            let cfg = state.config.read().await;
+            let custom = if cfg.admin.unauthorized_response.is_empty() { cfg.system.unauth_response.clone() } else { cfg.admin.unauthorized_response.clone() };
+            match custom.as_str() {
+                "404" => (StatusCode::NOT_FOUND, "").into_response(),
+                "blank" => (StatusCode::OK, "").into_response(),
+                "" => (StatusCode::UNAUTHORIZED, "unauthorized").into_response(),
+                page if page.starts_with('<') => (StatusCode::UNAUTHORIZED, [("content-type", "text/html; charset=utf-8")], page.to_string()).into_response(),
+                page => (StatusCode::UNAUTHORIZED, page.to_string()).into_response(),
+            }
+        }
+    }
 }
 
 async fn ui() -> Html<&'static str> { Html(include_str!("ui.html")) }
 
+async fn openapi() -> Response {
+    Json(json!({
+        "openapi": "3.0.3",
+        "info": {"title": "gately-rs API", "version": env!("CARGO_PKG_VERSION")},
+        "servers": [{"url": "/api"}],
+        "paths": {
+            "/login": {"post": {"summary": "管理员登录"}},
+            "/status": {"get": {"summary": "运行状态"}},
+            "/config": {"get": {"summary": "读取配置"}},
+            "/sites": {"get": {"summary": "站点列表"}, "post": {"summary": "新建站点"}},
+            "/port-forwards": {"get": {"summary": "端口转发列表"}, "post": {"summary": "新建端口转发"}},
+            "/proto-routes": {"get": {"summary": "协议分流列表"}, "post": {"summary": "新建协议分流"}},
+            "/notifications/channels": {"get": {"summary": "通知渠道"}, "post": {"summary": "新建通知渠道"}},
+            "/tasks": {"get": {"summary": "计划任务"}, "post": {"summary": "新建计划任务"}},
+            "/metrics/prometheus": {"get": {"summary": "Prometheus 指标"}}
+        },
+        "components": {"securitySchemes": {"bearerAuth": {"type": "http", "scheme": "bearer"}}}
+    })).into_response()
+}
+
 async fn oidc_providers(State(state): State<AppState>) -> Response {
-    let providers = state.config.read().await.auth.oidc.iter()
-        .filter(|p| p.enabled)
-        .map(|p| json!({ "id": p.id, "name": p.name }))
-        .collect::<Vec<_>>();
+    let providers = state.config.read().await.auth.oidc.iter().filter(|p| p.enabled)
+        .map(|p| json!({"id": p.id, "name": p.name})).collect::<Vec<_>>();
     Json(providers).into_response()
 }
 
 async fn login(State(state): State<AppState>, Json(payload): Json<LoginRequest>) -> Response {
+    let cfg = state.config.read().await;
+    let ip = "admin";
+    let fail_limit = cfg.auth.login_rate_limit;
+    drop(cfg);
+    let now = Utc::now();
+    {
+        let mut failures = state.login_failures.write().await;
+        let entry = failures.entry(ip.to_string()).or_insert((0, now));
+        if (now - entry.1).num_seconds() > 300 { *entry = (0, now); }
+        if fail_limit > 0 && entry.0 >= fail_limit {
+            metrics::audit(&state, ip, "login", "denied", "rate limited").await;
+            return (StatusCode::TOO_MANY_REQUESTS, "too many login attempts").into_response();
+        }
+    }
     let admin = state.config.read().await.admin.clone();
-    if payload.password != admin.password { return (StatusCode::UNAUTHORIZED, "bad password").into_response(); }
-    Json(json!({ "token": admin.token })).into_response()
+    if payload.password != admin.password {
+        let mut failures = state.login_failures.write().await;
+        let entry = failures.entry(ip.to_string()).or_insert((0, now));
+        entry.0 += 1; entry.1 = now;
+        metrics::audit(&state, ip, "login", "failed", "").await;
+        return (StatusCode::UNAUTHORIZED, "bad password").into_response();
+    }
+    state.login_failures.write().await.remove(ip);
+    metrics::audit(&state, ip, "login", "success", "").await;
+    Json(json!({"token": admin.token})).into_response()
 }
 
 async fn status(State(state): State<AppState>) -> Response {
     let config = state.config.read().await;
-    let ddns = state.ddns_status.read().await.clone();
-    let tunnels = state.tunnel_status.read().await.clone();
-    let stun = state.stun_status.read().await.clone();
-    let bans = state.banned_ips.read().await.len();
     Json(json!({
         "version": env!("CARGO_PKG_VERSION"),
-        "listeners": config.listeners.len(),
-        "sites": config.sites.len(),
-        "certificates": config.certificates.len(),
-        "ddns_tasks": config.ddns.len(),
-        "ddns_status": ddns,
-        "acme_tasks": config.acme.len(),
-        "waf_rules": config.waf_rules.len(),
-        "waf_profiles": config.waf_profiles.len(),
-        "jail": config.jail.enabled,
-        "tunnels": tunnels,
-        "stun": stun,
-        "banned_ips": bans,
+        "listeners": config.listeners.len(), "sites": config.sites.len(),
+        "certificates": config.certificates.len(), "ddns_tasks": config.ddns.len(),
+        "ddns_status": state.ddns_status.read().await.clone(),
+        "acme_tasks": config.acme.len(), "waf_rules": config.waf_rules.len(),
+        "waf_profiles": config.waf_profiles.len(), "jail": config.jail.enabled,
+        "tunnels": state.tunnel_status.read().await.clone(),
+        "stun": state.stun_status.read().await.clone(),
+        "banned_ips": state.banned_ips.read().await.len(),
         "oidc_providers": config.auth.oidc.len(),
+        "port_forwards": config.port_forwards.len(), "proto_routes": config.proto_routes.len(),
+        "notifications": config.notifications.channels.len(), "scheduled_tasks": config.scheduled_tasks.len(),
+        "ip_lists": config.ip_lists.len(), "site_users": config.site_users.len(),
     })).into_response()
 }
 
-async fn get_config(State(state): State<AppState>) -> Response {
-    Json(state.config.read().await.clone()).into_response()
-}
+async fn get_config(State(state): State<AppState>) -> Response { Json(state.config.read().await.clone()).into_response() }
 
 async fn reload_config(State(state): State<AppState>) -> Response {
     let config = match Config::load(&state.config_path) { Ok(c) => c, Err(err) => return internal(err) };
     *state.config.write().await = config;
-    Json(json!({ "ok": true })).into_response()
+    Json(json!({"ok": true})).into_response()
 }
 
-async fn list_sites(State(state): State<AppState>) -> Response {
-    Json(state.config.read().await.sites.clone()).into_response()
+async fn set_config(State(state): State<AppState>, Json(payload): Json<Config>) -> Response {
+    if let Err(err) = persist(&state, &payload) { return internal(err); }
+    *state.config.write().await = payload;
+    Json(json!({"ok": true})).into_response()
 }
+
+async fn list_sites(State(state): State<AppState>) -> Response { Json(state.config.read().await.sites.clone()).into_response() }
 
 async fn add_site(State(state): State<AppState>, Json(payload): Json<SiteRequest>) -> Response {
-    if payload.backend.is_empty() || payload.domains.is_empty() { return bad_request("domains and backend are required"); }
+    if payload.backend.is_empty() && payload.kind == "proxy" { return bad_request("backend is required for proxy sites"); }
     let site = SiteConfig {
         id: new_id("site"), domains: payload.domains, backend: payload.backend, listener: payload.listener,
-        waf_profile: None, waf_mode: "off".into(), allowed_ips: vec![], denied_ips: vec![],
+        kind: if payload.kind.is_empty() { "proxy".into() } else { payload.kind }, ..Default::default()
     };
     let mut config = state.config.write().await;
     config.sites.push(site.clone());
@@ -151,19 +193,37 @@ async fn add_site(State(state): State<AppState>, Json(payload): Json<SiteRequest
     Json(site).into_response()
 }
 
+async fn update_site(State(state): State<AppState>, Path(id): Path<String>, Json(payload): Json<Value>) -> Response {
+    let mut config = state.config.write().await;
+    let site = match config.sites.iter_mut().find(|s| s.id == id) { Some(s) => s, None => return StatusCode::NOT_FOUND.into_response() };
+    if let Ok(patch) = serde_json::from_value::<SiteConfig>(payload.clone()) { *site = patch; }
+    else {
+        let merged: Value = match serde_json::to_value(&*site).map(|mut v| { merge_json(&mut v, &payload); v }) { Ok(v) => v, Err(e) => return bad_request(e) };
+        match serde_json::from_value(merged) { Ok(v) => *site = v, Err(e) => return bad_request(e) }
+    }
+    let out = site.clone();
+    if let Err(err) = persist(&state, &config) { return internal(err); }
+    Json(out).into_response()
+}
+
+fn merge_json(base: &mut Value, patch: &Value) {
+    match (base, patch) {
+        (Value::Object(a), Value::Object(b)) => for (k, v) in b { merge_json(a.entry(k.clone()).or_insert(Value::Null), v) },
+        (a, b) => *a = b.clone(),
+    }
+}
+
 async fn delete_site(State(state): State<AppState>, Path(id): Path<String>) -> Response {
     let mut config = state.config.write().await;
     config.sites.retain(|s| s.id != id);
     if let Err(err) = persist(&state, &config) { return internal(err); }
-    Json(json!({ "ok": true })).into_response()
+    Json(json!({"ok": true})).into_response()
 }
 
-async fn list_certs(State(state): State<AppState>) -> Response {
-    Json(state.config.read().await.certificates.clone()).into_response()
-}
+async fn list_certs(State(state): State<AppState>) -> Response { Json(state.config.read().await.certificates.clone()).into_response() }
 
 async fn add_cert(State(state): State<AppState>, Json(payload): Json<CertRequest>) -> Response {
-    let cert = CertificateConfig { id: payload.id, cert_path: payload.cert_path, key_path: payload.key_path, acme_id: None };
+    let cert = CertificateConfig { id: payload.id, cert_path: payload.cert_path, key_path: payload.key_path, ..Default::default() };
     let mut config = state.config.write().await;
     config.certificates.push(cert.clone());
     if let Err(err) = persist(&state, &config) { return internal(err); }
@@ -174,20 +234,19 @@ async fn delete_cert(State(state): State<AppState>, Path(id): Path<String>) -> R
     let mut config = state.config.write().await;
     config.certificates.retain(|c| c.id != id);
     if let Err(err) = persist(&state, &config) { return internal(err); }
-    Json(json!({ "ok": true })).into_response()
+    Json(json!({"ok": true})).into_response()
 }
 
-async fn list_ddns(State(state): State<AppState>) -> Response {
-    Json(state.config.read().await.ddns.clone()).into_response()
-}
+async fn list_ddns(State(state): State<AppState>) -> Response { Json(state.config.read().await.ddns.clone()).into_response() }
 
 async fn add_ddns(State(state): State<AppState>, Json(payload): Json<DdnsRequest>) -> Response {
     let ip_source: IpSource = match serde_json::from_value(payload.ip_source) { Ok(s) => s, Err(err) => return bad_request(err) };
     let task = DdnsTask {
-        id: payload.id.unwrap_or_else(|| new_id("ddns")),
-        enabled: payload.enabled, provider: payload.provider, zone_id: payload.zone_id, api_token: payload.api_token,
-        name: payload.name, record_type: payload.record_type.to_ascii_uppercase(), ip_source,
-        interval_secs: payload.interval_secs.max(30), last_ip: None,
+        id: payload.id.unwrap_or_else(|| new_id("ddns")), enabled: payload.enabled, provider: payload.provider,
+        zone_id: payload.zone_id, api_token: payload.api_token, name: payload.name,
+        record_type: payload.record_type.to_ascii_uppercase(), ip_source,
+        interval_secs: payload.interval_secs.max(30), last_ip: None, options: payload.options,
+        webhooks: payload.webhooks, ..Default::default()
     };
     let mut config = state.config.write().await;
     config.ddns.push(task.clone());
@@ -199,69 +258,74 @@ async fn delete_ddns(State(state): State<AppState>, Path(id): Path<String>) -> R
     let mut config = state.config.write().await;
     config.ddns.retain(|t| t.id != id);
     if let Err(err) = persist(&state, &config) { return internal(err); }
-    Json(json!({ "ok": true })).into_response()
+    Json(json!({"ok": true})).into_response()
 }
 
 async fn run_ddns(State(state): State<AppState>, Path(id): Path<String>) -> Response {
     match run_and_record(&state, &id).await {
-        Ok(ip) => Json(json!({ "ok": true, "ip": ip })).into_response(),
+        Ok(ip) => Json(json!({"ok": true, "ip": ip})).into_response(),
         Err(err) => (StatusCode::BAD_GATEWAY, err).into_response(),
     }
 }
 
 async fn import_config(State(state): State<AppState>, Json(payload): Json<ImportRequest>) -> Response {
     match migrate::import_paths(&state, payload.paths, payload.keep_enabled).await {
-        Ok(report) => Json(report).into_response(),
-        Err(err) => bad_request(err),
+        Ok(report) => Json(report).into_response(), Err(err) => bad_request(err),
     }
 }
 
 async fn history_list(State(state): State<AppState>) -> Response {
     match history::list(&state.config_path) { Ok(ids) => Json(ids).into_response(), Err(err) => internal(err) }
 }
-
 async fn history_get(State(state): State<AppState>, Path(id): Path<String>) -> Response {
     match history::read(&state.config_path, &id) { Ok(text) => (StatusCode::OK, text).into_response(), Err(err) => bad_request(err) }
 }
-
 async fn history_diff(State(state): State<AppState>, Path(id): Path<String>) -> Response {
     match history::diff_with_current(&state.config_path, &id) { Ok(d) => (StatusCode::OK, d).into_response(), Err(err) => bad_request(err) }
 }
-
 async fn history_diff_two(State(state): State<AppState>, Path((a, b)): Path<(String, String)>) -> Response {
     match history::diff(&state.config_path, &a, &b) { Ok(d) => (StatusCode::OK, d).into_response(), Err(err) => bad_request(err) }
 }
-
 async fn history_rollback(State(state): State<AppState>, Path(id): Path<String>) -> Response {
     let text = match history::read(&state.config_path, &id) { Ok(t) => t, Err(err) => return bad_request(err) };
     let config: Config = match serde_json::from_str(&text) { Ok(c) => c, Err(err) => return bad_request(err) };
     if let Err(err) = config.save(&state.config_path) { return internal(err); }
     *state.config.write().await = config;
-    Json(json!({ "ok": true, "id": id })).into_response()
+    metrics::audit(&state, "admin", "rollback", &id, "").await;
+    Json(json!({"ok": true, "id": id})).into_response()
 }
 
 async fn list_generic(state: AppState, kind: &str) -> Response {
     let config = state.config.read().await;
     let value = match kind {
-        "acme" => json!(config.acme),
-        "waf_rules" => json!(config.waf_rules),
-        "waf_profiles" => json!(config.waf_profiles),
-        "tunnels" => json!(config.tunnels),
-        "stun" => json!(config.stun),
-        _ => json!([]),
+        "acme" => json!(config.acme), "waf_rules" => json!(config.waf_rules),
+        "waf_profiles" => json!(config.waf_profiles), "tunnels" => json!(config.tunnels),
+        "stun" => json!(config.stun), "port_forwards" => json!(config.port_forwards),
+        "proto_routes" => json!(config.proto_routes), "site_users" => json!(config.site_users),
+        "ip_lists" => json!(config.ip_lists), "notify_channels" => json!(config.notifications.channels),
+        "notify_rules" => json!(config.notifications.rules), "tasks" => json!(config.scheduled_tasks),
+        "api_tokens" => json!(config.admin.api_tokens), _ => json!([]),
     };
     Json(value).into_response()
 }
 
 async fn add_generic(state: AppState, kind: &str, value: Value) -> Response {
     let mut config = state.config.write().await;
-    let result = match kind {
-        "acme" => serde_json::from_value(value).map(|v: crate::config::AcmeTask| { config.acme.push(v.clone()); json!(v) }),
-        "waf_rules" => serde_json::from_value(value).map(|v: crate::config::WafRule| { config.waf_rules.push(v.clone()); json!(v) }),
-        "waf_profiles" => serde_json::from_value(value).map(|v: crate::config::WafProfile| { config.waf_profiles.push(v.clone()); json!(v) }),
-        "tunnels" => serde_json::from_value(value).map(|v: crate::config::TunnelTask| { config.tunnels.push(v.clone()); json!(v) }),
-        "stun" => serde_json::from_value(value).map(|v: crate::config::StunTask| { config.stun.push(v.clone()); json!(v) }),
-        _ => Err(serde_json::from_str::<Value>("null").unwrap_err()),
+    let result: Result<Value, String> = match kind {
+        "acme" => serde_json::from_value(value).map(|v: crate::config::AcmeTask| { config.acme.push(v.clone()); json!(v) }).map_err(|e| e.to_string()),
+        "waf_rules" => serde_json::from_value(value).map(|v: crate::config::WafRule| { config.waf_rules.push(v.clone()); json!(v) }).map_err(|e| e.to_string()),
+        "waf_profiles" => serde_json::from_value(value).map(|v: crate::config::WafProfile| { config.waf_profiles.push(v.clone()); json!(v) }).map_err(|e| e.to_string()),
+        "tunnels" => serde_json::from_value(value).map(|v: crate::config::TunnelTask| { config.tunnels.push(v.clone()); json!(v) }).map_err(|e| e.to_string()),
+        "stun" => serde_json::from_value(value).map(|v: crate::config::StunTask| { config.stun.push(v.clone()); json!(v) }).map_err(|e| e.to_string()),
+        "port_forwards" => serde_json::from_value(value).map(|v: crate::config::PortForwardTask| { config.port_forwards.push(v.clone()); json!(v) }).map_err(|e| e.to_string()),
+        "proto_routes" => serde_json::from_value(value).map(|v: crate::config::ProtoRouteTask| { config.proto_routes.push(v.clone()); json!(v) }).map_err(|e| e.to_string()),
+        "site_users" => serde_json::from_value(value).map(|v: crate::config::SiteUser| { config.site_users.push(v.clone()); json!(v) }).map_err(|e| e.to_string()),
+        "ip_lists" => serde_json::from_value(value).map(|v: crate::config::IpList| { config.ip_lists.push(v.clone()); json!(v) }).map_err(|e| e.to_string()),
+        "notify_channels" => serde_json::from_value(value).map(|v: crate::config::NotifyChannel| { config.notifications.channels.push(v.clone()); json!(v) }).map_err(|e| e.to_string()),
+        "notify_rules" => serde_json::from_value(value).map(|v: crate::config::NotifyRule| { config.notifications.rules.push(v.clone()); json!(v) }).map_err(|e| e.to_string()),
+        "tasks" => serde_json::from_value(value).map(|v: crate::config::ScheduledTask| { config.scheduled_tasks.push(v.clone()); json!(v) }).map_err(|e| e.to_string()),
+        "api_tokens" => serde_json::from_value(value).map(|v: ApiToken| { config.admin.api_tokens.push(v.clone()); json!(v) }).map_err(|e| e.to_string()),
+        _ => Err("unknown kind".into()),
     };
     let item = match result { Ok(v) => v, Err(err) => return bad_request(err) };
     if let Err(err) = persist(&state, &config) { return internal(err); }
@@ -276,26 +340,41 @@ async fn delete_generic(state: AppState, kind: &str, id: &str) -> Response {
         "waf_profiles" => config.waf_profiles.retain(|x| x.id != id),
         "tunnels" => config.tunnels.retain(|x| x.id != id),
         "stun" => config.stun.retain(|x| x.id != id),
+        "port_forwards" => config.port_forwards.retain(|x| x.id != id),
+        "proto_routes" => config.proto_routes.retain(|x| x.id != id),
+        "site_users" => config.site_users.retain(|x| x.id != id),
+        "ip_lists" => config.ip_lists.retain(|x| x.id != id),
+        "notify_channels" => config.notifications.channels.retain(|x| x.id != id),
+        "notify_rules" => config.notifications.rules.retain(|x| x.id != id),
+        "tasks" => config.scheduled_tasks.retain(|x| x.id != id),
+        "api_tokens" => config.admin.api_tokens.retain(|x| x.id != id),
         _ => {}
     }
     if let Err(err) = persist(&state, &config) { return internal(err); }
-    Json(json!({ "ok": true })).into_response()
+    Json(json!({"ok": true})).into_response()
 }
 
 macro_rules! generic_routes {
-    ($router:expr, $kind:literal, $list:ident, $add:ident, $del:ident) => {
+    ($kind:literal,$list:ident,$add:ident,$del:ident) => {
         async fn $list(State(state): State<AppState>) -> Response { list_generic(state, $kind).await }
         async fn $add(State(state): State<AppState>, Json(payload): Json<Value>) -> Response { add_generic(state, $kind, payload).await }
         async fn $del(State(state): State<AppState>, Path(id): Path<String>) -> Response { delete_generic(state, $kind, &id).await }
-
     };
 }
 
-generic_routes!(r, "acme", list_acme, add_acme, delete_acme);
-generic_routes!(r, "waf_rules", list_waf_rules, add_waf_rule, delete_waf_rule);
-generic_routes!(r, "waf_profiles", list_waf_profiles, add_waf_profile, delete_waf_profile);
-generic_routes!(r, "tunnels", list_tunnels, add_tunnel, delete_tunnel);
-generic_routes!(r, "stun", list_stun, add_stun, delete_stun);
+generic_routes!("acme", list_acme, add_acme, delete_acme);
+generic_routes!("waf_rules", list_waf_rules, add_waf_rule, delete_waf_rule);
+generic_routes!("waf_profiles", list_waf_profiles, add_waf_profile, delete_waf_profile);
+generic_routes!("tunnels", list_tunnels, add_tunnel, delete_tunnel);
+generic_routes!("stun", list_stun, add_stun, delete_stun);
+generic_routes!("port_forwards", list_forwards, add_forward, delete_forward);
+generic_routes!("proto_routes", list_routes, add_route, delete_route);
+generic_routes!("site_users", list_site_users, add_site_user, delete_site_user);
+generic_routes!("ip_lists", list_ip_lists, add_ip_list, delete_ip_list);
+generic_routes!("notify_channels", list_channels, add_channel, delete_channel);
+generic_routes!("notify_rules", list_rules, add_rule, delete_rule);
+generic_routes!("tasks", list_tasks, add_task, delete_task);
+generic_routes!("api_tokens", list_api_tokens, add_api_token, delete_api_token);
 
 async fn set_jail(State(state): State<AppState>, Json(payload): Json<JailConfig>) -> Response {
     let mut config = state.config.write().await;
@@ -303,24 +382,51 @@ async fn set_jail(State(state): State<AppState>, Json(payload): Json<JailConfig>
     if let Err(err) = persist(&state, &config) { return internal(err); }
     Json(payload).into_response()
 }
-
 async fn set_auth(State(state): State<AppState>, Json(payload): Json<AuthConfig>) -> Response {
     let mut config = state.config.write().await;
     config.auth = payload.clone();
     if let Err(err) = persist(&state, &config) { return internal(err); }
     Json(payload).into_response()
 }
-
-async fn tunnel_status(State(state): State<AppState>) -> Response {
-    Json(state.tunnel_status.read().await.clone()).into_response()
+async fn set_notifications(State(state): State<AppState>, Json(payload): Json<crate::config::NotificationConfig>) -> Response {
+    let mut config = state.config.write().await;
+    config.notifications = payload.clone();
+    if let Err(err) = persist(&state, &config) { return internal(err); }
+    Json(payload).into_response()
+}
+async fn set_system(State(state): State<AppState>, Json(payload): Json<crate::config::SystemConfig>) -> Response {
+    let mut config = state.config.write().await;
+    config.system = payload.clone();
+    if let Err(err) = persist(&state, &config) { return internal(err); }
+    Json(payload).into_response()
+}
+async fn set_backups(State(state): State<AppState>, Json(payload): Json<crate::config::BackupConfig>) -> Response {
+    let mut config = state.config.write().await;
+    config.backups = payload.clone();
+    if let Err(err) = persist(&state, &config) { return internal(err); }
+    Json(payload).into_response()
 }
 
-async fn stun_status(State(state): State<AppState>) -> Response {
-    Json(state.stun_status.read().await.clone()).into_response()
+async fn site_login(State(state): State<AppState>, headers: axum::http::HeaderMap, axum::Form(form): axum::Form<String>) -> Response {
+    let _ = &form;
+    let body = form;
+    let site_id = body.split('&').find_map(|p| p.strip_prefix("site=")).map(|v| v.to_string()).unwrap_or_default();
+    let site = state.config.read().await.sites.iter().find(|s| s.id == site_id).cloned();
+    match site {
+        Some(site) => site_ext::handle_login(state, site, headers, &body).await,
+        None => (StatusCode::NOT_FOUND, "site not found").into_response(),
+    }
 }
 
 async fn banned_ips(State(state): State<AppState>) -> Response {
     Json(state.banned_ips.read().await.clone()).into_response()
+}
+
+async fn run_backup(State(state): State<AppState>) -> Response {
+    match scheduler::create_backup(&state).await {
+        Ok(path) => Json(json!({"ok": true, "path": path})).into_response(),
+        Err(err) => (StatusCode::BAD_GATEWAY, err).into_response(),
+    }
 }
 
 pub fn admin_router(state: AppState) -> Router {
@@ -330,12 +436,19 @@ pub fn admin_router(state: AppState) -> Router {
         .route("/login/oidc/providers", get(oidc_providers))
         .route("/login/oidc/start", get(auth_ext::oidc_start))
         .route("/auth/oidc/callback", get(auth_ext::oidc_callback))
-        .route("/login/oidc/token", post(auth_ext::oidc_token));
+        .route("/login/oidc/token", post(auth_ext::oidc_token))
+        .route("/site-login", post(site_login))
+        .route("/openapi.json", get(openapi));
 
     let protected = Router::new()
         .route("/status", get(status))
-        .route("/config", get(get_config))
+        .route("/config", get(get_config).put(set_config))
         .route("/config/reload", post(reload_config))
+        .route("/metrics", get(metrics::stats_summary))
+        .route("/metrics/prometheus", get(metrics::metrics_prometheus))
+        .route("/system", get(metrics::system_handler).put(set_system))
+        .route("/topology", get(metrics::topology_handler))
+        .route("/audit", get(metrics::audit_handler))
         .route("/import", post(import_config))
         .route("/history", get(history_list))
         .route("/history/diff/{a}/{b}", get(history_diff_two))
@@ -343,7 +456,7 @@ pub fn admin_router(state: AppState) -> Router {
         .route("/history/{id}/diff", get(history_diff))
         .route("/history/{id}/rollback", post(history_rollback))
         .route("/sites", get(list_sites).post(add_site))
-        .route("/sites/{id}", delete(delete_site))
+        .route("/sites/{id}", axum::routing::patch(update_site).delete(delete_site))
         .route("/certs", get(list_certs).post(add_cert))
         .route("/certs/{id}", delete(delete_cert))
         .route("/ddns", get(list_ddns).post(add_ddns))
@@ -352,19 +465,51 @@ pub fn admin_router(state: AppState) -> Router {
         .route("/acme", get(list_acme).post(add_acme))
         .route("/acme/{id}", delete(delete_acme))
         .route("/acme/{id}/run", post(acme::run_handler))
+        .route("/acme/dns-tokens", get(acme::dns_tokens_handler))
         .route("/waf/rules", get(list_waf_rules).post(add_waf_rule))
         .route("/waf/rules/{id}", delete(delete_waf_rule))
         .route("/waf/profiles", get(list_waf_profiles).post(add_waf_profile))
         .route("/waf/profiles/{id}", delete(delete_waf_profile))
-        .route("/jail", post(set_jail))
+        .route("/jail", get(|| async { Json(json!({})) }).post(set_jail))
         .route("/jail/bans", get(banned_ips))
+        .route("/jail/ban", post(waf::ban_handler))
+        .route("/jail/unban/{ip}", post(waf::unban_handler))
         .route("/tunnels", get(list_tunnels).post(add_tunnel))
         .route("/tunnels/{id}", delete(delete_tunnel))
-        .route("/tunnels/status", get(tunnel_status))
+        .route("/tunnels/status", get(crate::state::tunnel_status_handler))
+        .route("/tunnels/{id}/install", post(tunnel::install_handler))
+        .route("/tunnels/{id}/rollback", post(tunnel::rollback_handler))
         .route("/stun", get(list_stun).post(add_stun))
         .route("/stun/{id}", delete(delete_stun))
-        .route("/stun/status", get(stun_status))
-        .route("/auth", post(set_auth))
+        .route("/stun/status", get(crate::state::stun_status_handler))
+        .route("/stun/{id}/run", post(stun::run_handler))
+        .route("/port-forwards", get(list_forwards).post(add_forward))
+        .route("/port-forwards/{id}", delete(delete_forward))
+        .route("/port-forwards/status", get(portforward::status_handler))
+        .route("/proto-routes", get(list_routes).post(add_route))
+        .route("/proto-routes/{id}", delete(delete_route))
+        .route("/proto-routes/status", get(protoroute::status_handler))
+        .route("/site-users", get(list_site_users).post(add_site_user))
+        .route("/site-users/{id}", delete(delete_site_user))
+        .route("/ip-lists", get(list_ip_lists).post(add_ip_list))
+        .route("/ip-lists/{id}", delete(delete_ip_list))
+        .route("/ip-lists/status", get(portforward::ip_lists_status))
+        .route("/notifications", get(|| async { Json(json!({})) }).put(set_notifications))
+        .route("/notifications/channels", get(list_channels).post(add_channel))
+        .route("/notifications/channels/{id}", delete(delete_channel))
+        .route("/notifications/rules", get(list_rules).post(add_rule))
+        .route("/notifications/rules/{id}", delete(delete_rule))
+        .route("/notifications/queue", get(notify::queue_handler))
+        .route("/notifications/test/{id}", post(notify::test_channel))
+        .route("/tasks", get(list_tasks).post(add_task))
+        .route("/tasks/{id}", delete(delete_task))
+        .route("/tasks/{id}/run", post(scheduler::run_handler))
+        .route("/tasks/status", get(crate::state::task_status_handler))
+        .route("/backups", get(|| async { Json(json!({})) }).put(set_backups))
+        .route("/backups/run", post(run_backup))
+        .route("/api-tokens", get(list_api_tokens).post(add_api_token))
+        .route("/api-tokens/{id}", delete(delete_api_token))
+        .route("/auth", get(|| async { Json(json!({})) }).post(set_auth))
         .route_layer(middleware::from_fn_with_state(state.clone(), require_auth));
 
     Router::new()

@@ -3,12 +3,29 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 
+fn default_true() -> bool { true }
+fn default_waf_mode() -> String { "off".into() }
+fn default_site_kind() -> String { "proxy".into() }
+fn default_auth_mode() -> String { "none".into() }
+fn default_challenge() -> String { "http-01".into() }
+fn default_max_failures() -> u32 { 5 }
+fn default_window_secs() -> u64 { 600 }
+fn default_ban_secs() -> u64 { 3600 }
+fn default_backend() -> String { "none".into() }
+fn default_nft_table() -> String { "gately".into() }
+fn default_nft_chain() -> String { "gately_jail".into() }
+fn default_stun_interval() -> u64 { 300 }
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Config {
     pub admin: AdminConfig,
+    #[serde(default)]
     pub listeners: Vec<ListenerConfig>,
+    #[serde(default)]
     pub sites: Vec<SiteConfig>,
+    #[serde(default)]
     pub certificates: Vec<CertificateConfig>,
+    #[serde(default)]
     pub ddns: Vec<DdnsTask>,
     #[serde(default)]
     pub acme: Vec<AcmeTask>,
@@ -24,6 +41,22 @@ pub struct Config {
     pub stun: Vec<StunTask>,
     #[serde(default)]
     pub auth: AuthConfig,
+    #[serde(default)]
+    pub port_forwards: Vec<PortForwardTask>,
+    #[serde(default)]
+    pub proto_routes: Vec<ProtoRouteTask>,
+    #[serde(default)]
+    pub site_users: Vec<SiteUser>,
+    #[serde(default)]
+    pub ip_lists: Vec<IpList>,
+    #[serde(default)]
+    pub notifications: NotificationConfig,
+    #[serde(default)]
+    pub scheduled_tasks: Vec<ScheduledTask>,
+    #[serde(default)]
+    pub backups: BackupConfig,
+    #[serde(default)]
+    pub system: SystemConfig,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -31,6 +64,30 @@ pub struct AdminConfig {
     pub listen: String,
     pub password: String,
     pub token: String,
+    #[serde(default)]
+    pub api_tokens: Vec<ApiToken>,
+    #[serde(default)]
+    pub security_entry: String,
+    #[serde(default)]
+    pub lan_only: bool,
+    #[serde(default)]
+    pub unauthorized_response: String,
+    #[serde(default)]
+    pub trusted_proxies: Vec<String>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct ApiToken {
+    pub id: String,
+    pub name: String,
+    pub token: String,
+    #[serde(default = "default_true")]
+    pub enabled: bool,
+    /// Comma separated module names, empty means all modules.
+    #[serde(default)]
+    pub scopes: Vec<String>,
+    #[serde(default)]
+    pub readonly: bool,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -38,7 +95,20 @@ pub struct ListenerConfig {
     pub name: String,
     pub listen: String,
     /// None means plain HTTP; Some(id) refers to CertificateConfig.id.
+    #[serde(default)]
     pub tls_cert: Option<String>,
+    /// Extra plain HTTP port sharing this listener, e.g. 80.
+    #[serde(default)]
+    pub http_port: Option<u16>,
+    /// redirect | serve | none for the extra HTTP port.
+    #[serde(default)]
+    pub http_mode: String,
+    #[serde(default)]
+    pub http3: bool,
+    #[serde(default)]
+    pub proxy_protocol: bool,
+    #[serde(default)]
+    pub firewall_open: bool,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -47,9 +117,22 @@ pub struct SiteConfig {
     /// Exact host names (port is stripped before matching). Wildcard "*" matches any host.
     pub domains: Vec<String>,
     /// Backend origin, e.g. http://127.0.0.1:3000
+    #[serde(default)]
     pub backend: String,
     /// Optional listener name restriction.
+    #[serde(default)]
     pub listener: Option<String>,
+    /// proxy | redirect | static | text | disconnect | nav
+    #[serde(default = "default_site_kind")]
+    pub kind: String,
+    #[serde(default)]
+    pub redirect_url: String,
+    #[serde(default)]
+    pub static_root: String,
+    #[serde(default)]
+    pub text_body: String,
+    #[serde(default)]
+    pub nav_html: String,
     /// WAF profile id; empty means no profile.
     #[serde(default)]
     pub waf_profile: Option<String>,
@@ -60,10 +143,84 @@ pub struct SiteConfig {
     pub allowed_ips: Vec<String>,
     #[serde(default)]
     pub denied_ips: Vec<String>,
+    #[serde(default)]
+    pub allow_ip_lists: Vec<String>,
+    #[serde(default)]
+    pub deny_ip_lists: Vec<String>,
+    /// none | basic | form | forward
+    #[serde(default = "default_auth_mode")]
+    pub auth_mode: String,
+    #[serde(default)]
+    pub auth_users: Vec<String>,
+    #[serde(default)]
+    pub forward_auth_url: String,
+    #[serde(default)]
+    pub pass_user_headers: bool,
+    #[serde(default)]
+    pub trust_logged_in: bool,
+    #[serde(default)]
+    pub path_rules: Vec<PathRule>,
+    #[serde(default)]
+    pub backends: Vec<Backend>,
+    #[serde(default)]
+    pub load_balance: String,
+    #[serde(default)]
+    pub health_check_path: String,
+    #[serde(default)]
+    pub rate_limit_per_min: u64,
+    #[serde(default)]
+    pub cache_ttl_secs: u64,
+    #[serde(default)]
+    pub compression: bool,
+    #[serde(default)]
+    pub proxy_protocol: bool,
+    #[serde(default)]
+    pub knock_required: bool,
+    #[serde(default)]
+    pub drop_on_deny: bool,
+    #[serde(default)]
+    pub geo_allow: Vec<String>,
+    #[serde(default)]
+    pub geo_deny: Vec<String>,
+    #[serde(default)]
+    pub error_page: String,
+    #[serde(default)]
+    pub intercept_errors: bool,
+    #[serde(default)]
+    pub group: String,
+    #[serde(default)]
+    pub order: i32,
+    #[serde(default)]
+    pub remark: String,
 }
 
-fn default_waf_mode() -> String {
-    "off".into()
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct PathRule {
+    /// prefix | exact | regex
+    #[serde(default)]
+    pub matcher: String,
+    #[serde(default)]
+    pub value: String,
+    /// backend | redirect | static | text | deny
+    #[serde(default)]
+    pub action: String,
+    #[serde(default)]
+    pub target: String,
+    #[serde(default)]
+    pub rewrite: String,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct Backend {
+    pub url: String,
+    #[serde(default = "default_true")]
+    pub enabled: bool,
+    #[serde(default)]
+    pub weight: u32,
+    #[serde(default)]
+    pub backup: bool,
+    #[serde(default)]
+    pub healthy: bool,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -71,25 +228,54 @@ pub struct CertificateConfig {
     pub id: String,
     pub cert_path: String,
     pub key_path: String,
-    /// If issued by an ACME task, record its id here.
     #[serde(default)]
     pub acme_id: Option<String>,
+    #[serde(default)]
+    pub domains: Vec<String>,
+    #[serde(default)]
+    pub deploy_ssh: Vec<CertDeploySsh>,
+    #[serde(default)]
+    pub deploy_containers: Vec<String>,
+    #[serde(default)]
+    pub hook: String,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct CertDeploySsh {
+    pub host: String,
+    pub user: String,
+    pub cert_path: String,
+    pub key_path: String,
+    #[serde(default)]
+    pub command: String,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct DdnsTask {
     pub id: String,
     pub enabled: bool,
-    /// MVP only supports "cloudflare".
     pub provider: String,
+    #[serde(default)]
     pub zone_id: String,
+    #[serde(default)]
     pub api_token: String,
     pub name: String,
-    /// A or AAAA.
     pub record_type: String,
     pub ip_source: IpSource,
     pub interval_secs: u64,
+    #[serde(default)]
     pub last_ip: Option<String>,
+    /// Provider-specific fields: TTl, proxied, endpoint, secret, etc.
+    #[serde(default)]
+    pub options: HashMap<String, String>,
+    #[serde(default)]
+    pub webhooks: Vec<String>,
+    #[serde(default)]
+    pub remark: String,
+    #[serde(default)]
+    pub group: String,
+    #[serde(default)]
+    pub delete_record_on_remove: bool,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -97,6 +283,7 @@ pub struct DdnsTask {
 pub enum IpSource {
     Static { ip: String },
     Url { url: String },
+    Command { command: String },
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -104,12 +291,10 @@ pub struct AcmeTask {
     pub id: String,
     pub domains: Vec<String>,
     pub email: String,
-    /// letsencrypt | zerossl | custom
     #[serde(default = "default_provider")]
     pub provider: String,
     #[serde(default = "default_directory")]
     pub directory: String,
-    /// http-01 only in this MVP.
     #[serde(default = "default_challenge")]
     pub challenge: String,
     pub cert_id: String,
@@ -121,28 +306,46 @@ pub struct AcmeTask {
     pub last_issued: Option<String>,
     #[serde(default)]
     pub last_error: Option<String>,
+    /// http-01 | dns-01 | tls-alpn-01
+    #[serde(default)]
+    pub dns_provider: String,
+    #[serde(default)]
+    pub dns_zone: String,
+    #[serde(default)]
+    pub dns_credentials: HashMap<String, String>,
+    /// External command receiving DNS_CHALLENGE_NAME / DNS_CHALLENGE_VALUE.
+    #[serde(default)]
+    pub dns_hook: String,
+    #[serde(default)]
+    pub eab_kid: String,
+    #[serde(default)]
+    pub eab_hmac: String,
+    /// default | shortlived
+    #[serde(default)]
+    pub profile: String,
 }
 
 fn default_provider() -> String { "letsencrypt".into() }
 fn default_directory() -> String { String::new() }
-fn default_challenge() -> String { "http-01".into() }
-fn default_true() -> bool { true }
 fn default_renew_days() -> u64 { 30 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct WafRule {
     pub id: String,
     pub name: String,
-    /// regex pattern
+    #[serde(default)]
     pub pattern: String,
-    /// path | query | user_agent | header | body
     #[serde(default = "default_target")]
     pub target: String,
-    /// deny | log
     #[serde(default = "default_action")]
     pub action: String,
     #[serde(default = "default_true")]
     pub enabled: bool,
+    /// builtin | custom | coraza-seclang
+    #[serde(default)]
+    pub source: String,
+    #[serde(default)]
+    pub severity: String,
 }
 
 fn default_target() -> String { "path".into() }
@@ -153,19 +356,25 @@ pub struct WafProfile {
     pub id: String,
     pub name: String,
     pub rule_ids: Vec<String>,
-    /// off | detect | block
     #[serde(default = "default_waf_mode")]
     pub mode: String,
+    /// Maximum inspected body bytes; 0 uses the global default.
+    #[serde(default)]
+    pub body_limit: usize,
+    #[serde(default)]
+    pub skip_paths: Vec<String>,
+    #[serde(default)]
+    pub trusted_users_bypass: bool,
+    #[serde(default)]
+    pub safeline_url: String,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct JailConfig {
     #[serde(default)]
     pub enabled: bool,
-    /// Optional log file to scan for failure lines.
     #[serde(default)]
     pub log_path: String,
-    /// Regex patterns marking a failed login attempt.
     #[serde(default)]
     pub patterns: Vec<String>,
     #[serde(default = "default_max_failures")]
@@ -176,35 +385,68 @@ pub struct JailConfig {
     pub ban_secs: u64,
     #[serde(default)]
     pub whitelist: Vec<String>,
-    /// none | nftables | iptables
+    /// none | nftables | iptables | ipset
     #[serde(default = "default_backend")]
     pub backend: String,
     #[serde(default = "default_nft_table")]
     pub nft_table: String,
     #[serde(default = "default_nft_chain")]
     pub nft_chain: String,
+    #[serde(default)]
+    pub log_sources: Vec<LogSource>,
+    #[serde(default)]
+    pub trap_ports: Vec<u16>,
+    #[serde(default)]
+    pub port_scan_threshold: u32,
+    #[serde(default)]
+    pub web_trap_paths: Vec<String>,
+    #[serde(default)]
+    pub trap_404_threshold: u32,
+    #[serde(default)]
+    pub tls_failure_ban: bool,
+    #[serde(default)]
+    pub ipv64_prefix_ban: bool,
+    #[serde(default)]
+    pub escalation: bool,
+    #[serde(default)]
+    pub permanent_bans: Vec<String>,
+    #[serde(default)]
+    pub ipset_name: String,
 }
 
-fn default_max_failures() -> u32 { 5 }
-fn default_window_secs() -> u64 { 600 }
-fn default_ban_secs() -> u64 { 3600 }
-fn default_backend() -> String { "none".into() }
-fn default_nft_table() -> String { "gately".into() }
-fn default_nft_chain() -> String { "gately_jail".into() }
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct LogSource {
+    pub id: String,
+    /// file | journal | command | docker | admin_login | waf | knock
+    #[serde(default)]
+    pub kind: String,
+    #[serde(default)]
+    pub value: String,
+    #[serde(default)]
+    pub pattern: String,
+    #[serde(default = "default_max_failures")]
+    pub max_failures: u32,
+    #[serde(default = "default_window_secs")]
+    pub window_secs: u64,
+    #[serde(default = "default_ban_secs")]
+    pub ban_secs: u64,
+    #[serde(default = "default_true")]
+    pub enabled: bool,
+    #[serde(default)]
+    pub template: String,
+}
 
 impl Default for JailConfig {
     fn default() -> Self {
         Self {
-            enabled: false,
-            log_path: String::new(),
-            patterns: Vec::new(),
-            max_failures: default_max_failures(),
-            window_secs: default_window_secs(),
-            ban_secs: default_ban_secs(),
-            whitelist: Vec::new(),
-            backend: default_backend(),
-            nft_table: default_nft_table(),
-            nft_chain: default_nft_chain(),
+            enabled: false, log_path: String::new(), patterns: Vec::new(),
+            max_failures: default_max_failures(), window_secs: default_window_secs(),
+            ban_secs: default_ban_secs(), whitelist: Vec::new(), backend: default_backend(),
+            nft_table: default_nft_table(), nft_chain: default_nft_chain(),
+            log_sources: Vec::new(), trap_ports: Vec::new(), port_scan_threshold: 0,
+            web_trap_paths: Vec::new(), trap_404_threshold: 0, tls_failure_ban: false,
+            ipv64_prefix_ban: false, escalation: false, permanent_bans: Vec::new(),
+            ipset_name: "gately_ban".into(),
         }
     }
 }
@@ -213,7 +455,10 @@ impl Default for JailConfig {
 pub struct TunnelTask {
     pub id: String,
     pub name: String,
-    /// Path to frpc/frps/cloudflared/... binary.
+    /// frpc | frps | cloudflared | tailscale | netbird | easytier | custom
+    #[serde(default)]
+    pub kind: String,
+    /// Path to binary.
     pub binary: String,
     #[serde(default)]
     pub args: Vec<String>,
@@ -225,39 +470,109 @@ pub struct TunnelTask {
     pub enabled: bool,
     #[serde(default = "default_true")]
     pub auto_restart: bool,
+    #[serde(default)]
+    pub managed: bool,
+    #[serde(default)]
+    pub version: String,
+    #[serde(default)]
+    pub install_url: String,
+    #[serde(default)]
+    pub config_text: String,
+    #[serde(default)]
+    pub public_address: Option<String>,
+    #[serde(default)]
+    pub group: String,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct StunTask {
     pub id: String,
-    /// e.g. stun.l.google.com:19302
+    #[serde(default)]
     pub server: String,
     #[serde(default = "default_true")]
     pub enabled: bool,
     #[serde(default = "default_stun_interval")]
     pub interval_secs: u64,
+    /// udp | tcp | both
+    #[serde(default = "default_stun_protocol")]
+    pub protocol: String,
+    #[serde(default)]
+    pub keepalive_secs: u64,
+    #[serde(default)]
+    pub upnp: bool,
+    #[serde(default)]
+    pub webhooks: Vec<String>,
+    #[serde(default)]
+    pub change_script: String,
+    #[serde(default)]
+    pub knock_required: bool,
 }
 
-fn default_stun_interval() -> u64 { 300 }
+fn default_stun_protocol() -> String { "udp".into() }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct AuthConfig {
-    /// Base32 secret for TOTP.
     #[serde(default)]
     pub totp_secret: Option<String>,
     #[serde(default)]
     pub require_totp: bool,
     #[serde(default)]
     pub oidc: Vec<OidcProvider>,
-    /// Allow list of OIDC user identifiers (sub or email). Empty allows any authenticated user.
     #[serde(default)]
     pub oidc_allowed_users: Vec<String>,
+    /// Shared users used by Web sites and the built-in OIDC provider.
+    #[serde(default)]
+    pub users: Vec<SharedUser>,
+    #[serde(default)]
+    pub password_login: bool,
+    #[serde(default)]
+    pub login_rate_limit: u32,
+    #[serde(default)]
+    pub lockout_secs: u64,
+    #[serde(default)]
+    pub weak_password_check: bool,
+    #[serde(default)]
+    pub security_score: bool,
+    #[serde(default)]
+    pub builtin_oidc: bool,
+    #[serde(default)]
+    pub forward_auth_cookie_domain: String,
 }
 
-impl Default for AuthConfig {
-    fn default() -> Self {
-        Self { totp_secret: None, require_totp: false, oidc: Vec::new(), oidc_allowed_users: Vec::new() }
-    }
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct SharedUser {
+    pub username: String,
+    #[serde(default)]
+    pub password: String,
+    #[serde(default)]
+    pub display_name: String,
+    #[serde(default)]
+    pub email: String,
+    #[serde(default)]
+    pub groups: Vec<String>,
+    #[serde(default)]
+    pub totp_secret: Option<String>,
+    #[serde(default)]
+    pub passkey_credentials: Vec<String>,
+    #[serde(default = "default_true")]
+    pub enabled: bool,
+    #[serde(default)]
+    pub readonly: bool,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct SiteUser {
+    pub id: String,
+    pub username: String,
+    pub password: String,
+    #[serde(default)]
+    pub display_name: String,
+    #[serde(default)]
+    pub email: String,
+    #[serde(default)]
+    pub groups: Vec<String>,
+    #[serde(default = "default_true")]
+    pub enabled: bool,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -272,6 +587,293 @@ pub struct OidcProvider {
     pub enabled: bool,
 }
 
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct PortForwardTask {
+    pub id: String,
+    pub name: String,
+    #[serde(default = "default_true")]
+    pub enabled: bool,
+    /// tcp | udp
+    #[serde(default = "default_tcp")]
+    pub protocol: String,
+    /// listen address; port may be a range such as 10000-10010.
+    pub listen: String,
+    /// Fallback targets in priority order.
+    pub targets: Vec<String>,
+    #[serde(default)]
+    pub max_connections: u64,
+    #[serde(default = "default_idle_timeout")]
+    pub idle_timeout_secs: u64,
+    /// off | v1 | v2
+    #[serde(default)]
+    pub proxy_protocol: String,
+    #[serde(default)]
+    pub source_allow: Vec<String>,
+    #[serde(default)]
+    pub source_deny: Vec<String>,
+    #[serde(default)]
+    pub source_max_connections: HashMap<String, u64>,
+    #[serde(default)]
+    pub knock_required: bool,
+    #[serde(default)]
+    pub group: String,
+    #[serde(default)]
+    pub order: i32,
+    #[serde(default)]
+    pub remark: String,
+}
+
+fn default_tcp() -> String { "tcp".into() }
+fn default_idle_timeout() -> u64 { 300 }
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct ProtoRouteTask {
+    pub id: String,
+    pub name: String,
+    pub listen: String,
+    #[serde(default = "default_true")]
+    pub enabled: bool,
+    pub routes: Vec<ProtoRouteRule>,
+    #[serde(default)]
+    pub default_target: String,
+    /// Seconds to wait for the first bytes of server-first protocols such as VNC.
+    #[serde(default = "default_wait_timeout")]
+    pub wait_timeout_secs: u64,
+    #[serde(default)]
+    pub source_allow: Vec<String>,
+    #[serde(default)]
+    pub source_deny: Vec<String>,
+    #[serde(default)]
+    pub group: String,
+}
+
+fn default_wait_timeout() -> u64 { 5 }
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct ProtoRouteRule {
+    pub id: String,
+    /// sni | alpn | http_host | minecraft | protocol | wait
+    pub matcher: String,
+    pub value: String,
+    pub target: String,
+    /// off | v1 | v2
+    #[serde(default)]
+    pub proxy_protocol: String,
+    #[serde(default)]
+    pub knock_required: bool,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct IpList {
+    pub id: String,
+    pub name: String,
+    #[serde(default)]
+    pub url: String,
+    #[serde(default)]
+    pub file: String,
+    #[serde(default = "default_stun_interval")]
+    pub refresh_secs: u64,
+    #[serde(default = "default_true")]
+    pub enabled: bool,
+    #[serde(default)]
+    pub entries: Vec<String>,
+    #[serde(default)]
+    pub last_update: Option<String>,
+    #[serde(default)]
+    pub last_error: Option<String>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct NotificationConfig {
+    #[serde(default)]
+    pub channels: Vec<NotifyChannel>,
+    #[serde(default)]
+    pub rules: Vec<NotifyRule>,
+    #[serde(default = "default_true")]
+    pub retry: bool,
+    #[serde(default)]
+    pub proxy: String,
+    #[serde(default)]
+    pub quiet_hours: String,
+}
+
+impl Default for NotificationConfig {
+    fn default() -> Self {
+        Self { channels: Vec::new(), rules: Vec::new(), retry: true, proxy: String::new(), quiet_hours: String::new() }
+    }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct NotifyChannel {
+    pub id: String,
+    pub name: String,
+    /// webhook | telegram | bark | ntfy | gotify | pushover | discord | slack |
+    /// serverchan | pushplus | wecom | dingtalk | feishu | email | command
+    pub kind: String,
+    #[serde(default)]
+    pub endpoint: String,
+    #[serde(default)]
+    pub token: String,
+    #[serde(default)]
+    pub extra: HashMap<String, String>,
+    #[serde(default = "default_true")]
+    pub enabled: bool,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct NotifyRule {
+    pub id: String,
+    /// Event name or wildcard, e.g. cert.*, address.changed.
+    pub event: String,
+    #[serde(default)]
+    pub channels: Vec<String>,
+    #[serde(default)]
+    pub dedup_secs: u64,
+    #[serde(default = "default_true")]
+    pub enabled: bool,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct ScheduledTask {
+    pub id: String,
+    pub name: String,
+    /// Five-field cron expression: minute hour day month weekday.
+    pub cron: String,
+    /// command | http
+    pub kind: String,
+    #[serde(default)]
+    pub command: String,
+    #[serde(default)]
+    pub url: String,
+    #[serde(default)]
+    pub method: String,
+    #[serde(default)]
+    pub body: String,
+    #[serde(default = "default_true")]
+    pub enabled: bool,
+    #[serde(default)]
+    pub timeout_secs: u64,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct BackupConfig {
+    #[serde(default = "default_true")]
+    pub enabled: bool,
+    #[serde(default = "default_backup_cron")]
+    pub cron: String,
+    #[serde(default)]
+    pub directory: String,
+    #[serde(default = "default_keep_backups")]
+    pub keep: u32,
+    #[serde(default)]
+    pub password: String,
+}
+
+fn default_backup_cron() -> String { "0 3 * * *".into() }
+fn default_keep_backups() -> u32 { 14 }
+
+impl Default for BackupConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            cron: default_backup_cron(),
+            directory: String::new(),
+            keep: default_keep_backups(),
+            password: String::new(),
+        }
+    }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct SystemConfig {
+    #[serde(default)]
+    pub timezone: String,
+    #[serde(default)]
+    pub dns_servers: Vec<String>,
+    #[serde(default)]
+    pub doh_url: String,
+    #[serde(default)]
+    pub log_level: String,
+    #[serde(default = "default_true")]
+    pub update_check: bool,
+    #[serde(default)]
+    pub disabled_modules: Vec<String>,
+    #[serde(default)]
+    pub audit_retention_days: u64,
+    #[serde(default)]
+    pub unauth_response: String,
+}
+
+impl Default for SystemConfig {
+    fn default() -> Self {
+        Self {
+            timezone: String::new(), dns_servers: Vec::new(), doh_url: String::new(),
+            log_level: "info".into(), update_check: true, disabled_modules: Vec::new(),
+            audit_retention_days: 30, unauth_response: String::new(),
+        }
+    }
+}
+
+impl Default for SiteConfig {
+    fn default() -> Self {
+        Self {
+            id: String::new(), domains: Vec::new(), backend: String::new(), listener: None,
+            kind: default_site_kind(), redirect_url: String::new(), static_root: String::new(),
+            text_body: String::new(), nav_html: String::new(), waf_profile: None,
+            waf_mode: default_waf_mode(), allowed_ips: Vec::new(), denied_ips: Vec::new(),
+            allow_ip_lists: Vec::new(), deny_ip_lists: Vec::new(), auth_mode: default_auth_mode(),
+            auth_users: Vec::new(), forward_auth_url: String::new(), pass_user_headers: false,
+            trust_logged_in: false, path_rules: Vec::new(), backends: Vec::new(),
+            load_balance: String::new(), health_check_path: String::new(), rate_limit_per_min: 0,
+            cache_ttl_secs: 0, compression: false, proxy_protocol: false, knock_required: false,
+            drop_on_deny: false, geo_allow: Vec::new(), geo_deny: Vec::new(), error_page: String::new(),
+            intercept_errors: false, group: String::new(), order: 0, remark: String::new(),
+        }
+    }
+}
+
+impl Default for DdnsTask {
+    fn default() -> Self {
+        Self {
+            id: String::new(), enabled: false, provider: "cloudflare".into(), zone_id: String::new(),
+            api_token: String::new(), name: String::new(), record_type: "A".into(),
+            ip_source: IpSource::Static { ip: String::new() }, interval_secs: 300, last_ip: None,
+            options: HashMap::new(), webhooks: Vec::new(), remark: String::new(), group: String::new(),
+            delete_record_on_remove: false,
+        }
+    }
+}
+
+impl Default for CertificateConfig {
+    fn default() -> Self {
+        Self {
+            id: String::new(), cert_path: String::new(), key_path: String::new(), acme_id: None,
+            domains: Vec::new(), deploy_ssh: Vec::new(), deploy_containers: Vec::new(), hook: String::new(),
+        }
+    }
+}
+
+impl Default for TunnelTask {
+    fn default() -> Self {
+        Self {
+            id: String::new(), name: String::new(), kind: String::new(), binary: String::new(),
+            args: Vec::new(), workdir: None, env: HashMap::new(), enabled: false,
+            auto_restart: true, managed: false, version: String::new(), install_url: String::new(),
+            config_text: String::new(), public_address: None, group: String::new(),
+        }
+    }
+}
+
+impl Default for StunTask {
+    fn default() -> Self {
+        Self {
+            id: String::new(), server: String::new(), enabled: false, interval_secs: 300,
+            protocol: default_stun_protocol(), keepalive_secs: 0, upnp: false, webhooks: Vec::new(),
+            change_script: String::new(), knock_required: false,
+        }
+    }
+}
+
 impl Default for Config {
     fn default() -> Self {
         Self {
@@ -279,11 +881,16 @@ impl Default for Config {
                 listen: "0.0.0.0:16680".into(),
                 password: "gately.cn".into(),
                 token: "dev-token-change-me".into(),
+                api_tokens: Vec::new(),
+                security_entry: String::new(),
+                lan_only: false,
+                unauthorized_response: String::new(),
+                trusted_proxies: Vec::new(),
             },
             listeners: vec![ListenerConfig {
-                name: "http".into(),
-                listen: "0.0.0.0:18080".into(),
-                tls_cert: None,
+                name: "http".into(), listen: "0.0.0.0:18080".into(), tls_cert: None,
+                http_port: None, http_mode: String::new(), http3: false,
+                proxy_protocol: false, firewall_open: false,
             }],
             sites: Vec::new(),
             certificates: Vec::new(),
@@ -295,6 +902,25 @@ impl Default for Config {
             tunnels: Vec::new(),
             stun: Vec::new(),
             auth: AuthConfig::default(),
+            port_forwards: Vec::new(),
+            proto_routes: Vec::new(),
+            site_users: Vec::new(),
+            ip_lists: Vec::new(),
+            notifications: NotificationConfig::default(),
+            scheduled_tasks: Vec::new(),
+            backups: BackupConfig::default(),
+            system: SystemConfig::default(),
+        }
+    }
+}
+
+impl Default for AuthConfig {
+    fn default() -> Self {
+        Self {
+            totp_secret: None, require_totp: false, oidc: Vec::new(), oidc_allowed_users: Vec::new(),
+            users: Vec::new(), password_login: true, login_rate_limit: 5, lockout_secs: 300,
+            weak_password_check: true, security_score: true, builtin_oidc: false,
+            forward_auth_cookie_domain: String::new(),
         }
     }
 }
