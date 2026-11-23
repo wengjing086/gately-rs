@@ -1,5 +1,6 @@
 /target/
 /.smoke*/
+/.release/
 /.cargo/
 gately.json
 *.json.tmp
