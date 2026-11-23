@@ -3,79 +3,176 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>gately-rs MVP</title>
+<title>gately-rs</title>
 <style>
 body{font-family:system-ui,-apple-system,"Segoe UI",sans-serif;margin:0;background:#f6f7f9;color:#1f2328}
-header{background:#fff;border-bottom:1px solid #d8dee4;padding:14px 24px;display:flex;gap:16px;align-items:center}
-header h1{font-size:18px;margin:0}
-main{max-width:1080px;margin:24px auto;padding:0 20px;display:grid;gap:16px}
-.card{background:#fff;border:1px solid #d8dee4;border-radius:8px;padding:16px}
+header{background:#fff;border-bottom:1px solid #d8dee4;padding:12px 24px;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+header h1{font-size:18px;margin:0 12px 0 0}
+main{max-width:1200px;margin:20px auto;padding:0 20px;display:grid;gap:14px}
+.card{background:#fff;border:1px solid #d8dee4;border-radius:8px;padding:14px}
+.card h3{margin:0 0 10px;font-size:15px}
 .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:6px 0}
 input,select,button{font:inherit;padding:6px 9px;border:1px solid #d0d7de;border-radius:6px}
 button{cursor:pointer;background:#f3f4f6}
 button.primary{background:#1f883d;color:#fff;border-color:#1f883d}
 button.danger{color:#b42318;border-color:#f3b4ad}
-pre{background:#f6f8fa;padding:10px;border-radius:6px;overflow:auto;font-size:12px}
+pre{background:#f6f8fa;padding:10px;border-radius:6px;overflow:auto;font-size:12px;max-height:280px}
 small{color:#656d76}
 code{background:#f6f8fa;padding:2px 5px;border-radius:4px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:14px}
 </style>
 </head>
 <body>
 <header>
-  <h1>gately-rs MVP</h1>
-  <input id="password" type="password" placeholder="admin password" style="width:170px">
+  <h1>gately-rs</h1>
+  <input id="password" type="password" placeholder="admin password" style="width:160px">
+  <input id="totp" type="text" placeholder="TOTP (可选)" style="width:100px">
   <button class="primary" id="loginBtn">登录</button>
+  <span id="oidc"></span>
   <span id="who"></span>
 </header>
 <main>
   <section class="card">
-    <h3>状态</h3>
+    <h3>状态与配置</h3>
     <div class="row"><button id="refreshBtn">刷新</button><button id="reloadBtn">从磁盘重载配置</button></div>
     <pre id="status">未登录</pre>
   </section>
 
+  <div class="grid">
   <section class="card">
-    <h3>Web 站点（反向代理）</h3>
+    <h3>Web 站点（反向代理 / WAF / IP 过滤）</h3>
     <div class="row">
-      <input id="siteDomains" placeholder="域名，逗号分隔，如 localhost,example.com" style="width:310px">
-      <input id="siteBackend" placeholder="后端，如 http://127.0.0.1:3000" style="width:280px">
-      <input id="siteListener" placeholder="监听器名（可空）" style="width:150px">
+      <input id="siteDomains" placeholder="域名，逗号分隔" style="width:220px">
+      <input id="siteBackend" placeholder="后端 http://127.0.0.1:3000" style="width:230px">
       <button class="primary" id="addSiteBtn">添加</button>
     </div>
     <div id="sites"></div>
+    <small>站点级 WAF 与 IP 过滤请通过 /api/config 或编辑 gately.json 设置 waf_profile / waf_mode / allowed_ips / denied_ips。</small>
   </section>
 
   <section class="card">
-    <h3>TLS 证书（静态 PEM，重启后监听生效）</h3>
+    <h3>TLS 证书（静态 PEM）</h3>
     <div class="row">
-      <input id="certId" placeholder="证书 ID，如 default" style="width:150px">
-      <input id="certPath" placeholder="cert.pem 路径" style="width:280px">
-      <input id="keyPath" placeholder="key.pem 路径" style="width:280px">
+      <input id="certId" placeholder="证书 ID" style="width:120px">
+      <input id="certPath" placeholder="cert.pem 路径" style="width:200px">
+      <input id="keyPath" placeholder="key.pem 路径" style="width:200px">
       <button class="primary" id="addCertBtn">添加</button>
     </div>
     <div id="certs"></div>
   </section>
 
   <section class="card">
-    <h3>动态域名（MVP 仅 Cloudflare）</h3>
+    <h3>ACME 自动证书（HTTP-01，需 80 端口可达）</h3>
     <div class="row">
-      <input id="ddnsName" placeholder="记录名，如 nas.example.com" style="width:220px">
-      <input id="ddnsZone" placeholder="Zone ID" style="width:200px">
-      <input id="ddnsToken" type="password" placeholder="API Token" style="width:200px">
+      <input id="acmeId" placeholder="任务 ID" style="width:120px">
+      <input id="acmeDomains" placeholder="域名，逗号分隔" style="width:220px">
+      <input id="acmeEmail" placeholder="邮箱" style="width:170px">
+      <input id="acmeCertId" placeholder="证书 ID" style="width:120px">
+      <button class="primary" id="addAcmeBtn">添加</button>
+    </div>
+    <div id="acme"></div>
+  </section>
+
+  <section class="card">
+    <h3>动态域名（Cloudflare）</h3>
+    <div class="row">
+      <input id="ddnsName" placeholder="nas.example.com" style="width:190px">
+      <input id="ddnsZone" placeholder="Zone ID" style="width:150px">
+      <input id="ddnsToken" type="password" placeholder="API Token" style="width:170px">
       <select id="ddnsType"><option>A</option><option>AAAA</option></select>
       <select id="ddnsKind"><option value="static">静态 IP</option><option value="url">URL 获取</option></select>
-      <input id="ddnsValue" placeholder="IP 或取 IP 的 URL" style="width:220px">
-      <input id="ddnsInterval" type="number" value="300" style="width:100px" title="检查周期（秒，最小 30）">
-      <label><input id="ddnsEnabled" type="checkbox" checked> 启用</label>
+      <input id="ddnsValue" placeholder="IP 或 URL（支持 {STUN_id_ADDR}）" style="width:200px">
       <button class="primary" id="addDdnsBtn">添加</button>
     </div>
     <div id="ddns"></div>
   </section>
+
+  <section class="card">
+    <h3>WAF 规则 / 配置集</h3>
+    <div class="row">
+      <input id="wafId" placeholder="规则 ID" style="width:110px">
+      <input id="wafName" placeholder="名称" style="width:130px">
+      <input id="wafPattern" placeholder="正则，如 \.\./" style="width:170px">
+      <select id="wafTarget"><option value="path">path</option><option value="query">query</option><option value="user_agent">user_agent</option><option value="body">body</option></select>
+      <select id="wafAction"><option value="deny">deny</option><option value="log">log</option></select>
+      <button class="primary" id="addWafBtn">添加规则</button>
+    </div>
+    <div id="waf"></div>
+  </section>
+
+  <section class="card">
+    <h3>入侵防护 / 封禁</h3>
+    <div class="row">
+      <label><input id="jailEnabled" type="checkbox"> 启用</label>
+      <input id="jailLog" placeholder="日志文件路径" style="width:190px">
+      <input id="jailPatterns" placeholder="失败正则，逗号分隔" style="width:200px">
+      <input id="jailMax" type="number" value="5" style="width:70px" title="失败次数">
+      <select id="jailBackend"><option value="none">none</option><option value="nftables">nftables</option><option value="iptables">iptables</option></select>
+      <button class="primary" id="saveJailBtn">保存</button>
+    </div>
+    <pre id="bans"></pre>
+  </section>
+
+  <section class="card">
+    <h3>隧道托管（外部二进制）</h3>
+    <div class="row">
+      <input id="tunId" placeholder="ID" style="width:110px">
+      <input id="tunName" placeholder="名称" style="width:130px">
+      <input id="tunBinary" placeholder="frpc / cloudflared 路径" style="width:220px">
+      <input id="tunArgs" placeholder="参数，空格分隔" style="width:180px">
+      <button class="primary" id="addTunBtn">添加</button>
+    </div>
+    <div id="tunnels"></div>
+  </section>
+
+  <section class="card">
+    <h3>STUN 公网地址探测</h3>
+    <div class="row">
+      <input id="stunId" placeholder="ID" style="width:110px">
+      <input id="stunServer" placeholder="stun.l.google.com:19302" style="width:250px">
+      <button class="primary" id="addStunBtn">添加</button>
+    </div>
+    <div id="stun"></div>
+  </section>
+
+  <section class="card">
+    <h3>配置历史 / 回滚</h3>
+    <div class="row"><button id="historyBtn">刷新列表</button></div>
+    <div id="history"></div>
+  </section>
+
+  <section class="card">
+    <h3>导入 Lucky / JSON / ZIP</h3>
+    <div class="row">
+      <input id="importPaths" placeholder="文件路径，逗号分隔" style="width:330px">
+      <label><input id="keepEnabled" type="checkbox"> 保留启用状态</label>
+      <button class="primary" id="importBtn">导入</button>
+    </div>
+    <pre id="importResult"></pre>
+    <small>加密的 .lkcf 无法解析，会给出提示；导入的规则默认停用。</small>
+  </section>
+
+  <section class="card">
+    <h3>认证（TOTP / OIDC）</h3>
+    <div class="row">
+      <input id="totpSecret" placeholder="Base32 TOTP secret" style="width:190px">
+      <label><input id="requireTotp" type="checkbox"> 登录要求 TOTP</label>
+      <input id="oidcJson" placeholder='OIDC providers JSON' style="width:260px">
+      <button class="primary" id="saveAuthBtn">保存</button>
+    </div>
+  </section>
+  </div>
 </main>
 
 <script>
 const $ = id => document.getElementById(id);
 let token = localStorage.getItem('gately_token') || '';
+const params = new URLSearchParams(location.search);
+if (params.get('oidc_code')) {
+  fetch('/api/login/oidc/token', {method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'},
+    body:'code=' + encodeURIComponent(params.get('oidc_code'))})
+    .then(r => r.json()).then(d => { if (d.token) { token = d.token; localStorage.setItem('gately_token', token); $('who').textContent='OIDC 已登录'; refresh(); } });
+}
 if (token) $('who').textContent = '已保存 token';
 
 async function api(path, options = {}) {
@@ -93,123 +190,125 @@ async function api(path, options = {}) {
   if (!resp.ok) throw new Error(typeof data === 'string' ? data : JSON.stringify(data));
   return data;
 }
-
-function esc(v) {
-  return String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-}
+function esc(v) { return String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function rows(items, render) { return items.length ? items.map(render).join('') : '<small>暂无</small>'; }
 
 function renderSites(items) {
-  $('sites').innerHTML = items.length ? items.map(s => `
-    <div class="row">
-      <code>${esc(s.id)}</code>
-      <span>${esc(s.domains.join(', '))}</span>
-      <small>→ ${esc(s.backend)}</small>
-      ${s.listener ? `<small>[${esc(s.listener)}]</small>` : ''}
-      <button class="danger" onclick="delSite('${esc(s.id)}')">删除</button>
-    </div>`).join('') : '<small>暂无站点</small>';
+  $('sites').innerHTML = rows(items, s => `<div class="row"><code>${esc(s.id)}</code><span>${esc(s.domains.join(', '))}</span><small>→ ${esc(s.backend)}</small><small>${esc(s.waf_mode||'off')}</small><button class="danger" onclick="del('/sites/${encodeURIComponent(s.id)}')">删除</button></div>`);
 }
-
 function renderCerts(items) {
-  $('certs').innerHTML = items.length ? items.map(c => `
-    <div class="row">
-      <code>${esc(c.id)}</code>
-      <small>${esc(c.cert_path)} / ${esc(c.key_path)}</small>
-      <button class="danger" onclick="delCert('${esc(c.id)}')">删除</button>
-    </div>`).join('') : '<small>暂无证书</small>';
+  $('certs').innerHTML = rows(items, c => `<div class="row"><code>${esc(c.id)}</code><small>${esc(c.cert_path)}</small><button class="danger" onclick="del('/certs/${encodeURIComponent(c.id)}')">删除</button></div>`);
 }
-
 function renderDdns(items, status) {
-  $('ddns').innerHTML = items.length ? items.map(t => {
+  $('ddns').innerHTML = rows(items, t => {
     const st = status[t.id] || {};
-    const ipSrc = t.ip_source.kind === 'static' ? t.ip_source.ip : t.ip_source.url;
-    return `<div class="row">
-      <code>${esc(t.id)}</code>
-      <span>${esc(t.name)} (${esc(t.record_type)})</span>
-      <small>${t.enabled ? '启用' : '停用'} · ${esc(ipSrc)}</small>
-      <small>最近 IP: ${esc(st.last_ip || t.last_ip || '-')}</small>
-      ${st.last_error ? `<small style="color:#b42318">${esc(st.last_error)}</small>` : ''}
-      <button onclick="runDdns('${esc(t.id)}')">立即执行</button>
-      <button class="danger" onclick="delDdns('${esc(t.id)}')">删除</button>
-    </div>`;
-  }).join('') : '<small>暂无任务</small>';
+    return `<div class="row"><code>${esc(t.id)}</code><span>${esc(t.name)} (${esc(t.record_type)})</span><small>${esc(st.last_ip || t.last_ip || '-')}</small>${st.last_error ? `<small style="color:#b42318">${esc(st.last_error)}</small>`:''}<button onclick="runTask('/ddns/${encodeURIComponent(t.id)}/run','DDNS')">立即执行</button><button class="danger" onclick="del('/ddns/${encodeURIComponent(t.id)}')">删除</button></div>`;
+  });
+}
+function renderAcme(items) {
+  $('acme').innerHTML = rows(items, t => `<div class="row"><code>${esc(t.id)}</code><span>${esc(t.domains.join(', '))}</span><small>${esc(t.last_error||'')}</small><button onclick="runTask('/acme/${encodeURIComponent(t.id)}/run','ACME')">签发</button><button class="danger" onclick="del('/acme/${encodeURIComponent(t.id)}')">删除</button></div>`);
+}
+function renderWaf(items) {
+  $('waf').innerHTML = rows(items, r => `<div class="row"><code>${esc(r.id)}</code><span>${esc(r.name)}</span><small>${esc(r.target)} / ${esc(r.action)}</small><button class="danger" onclick="del('/waf/rules/${encodeURIComponent(r.id)}')">删除</button></div>`);
+}
+function renderTunnels(items, status) {
+  $('tunnels').innerHTML = rows(items, t => `<div class="row"><code>${esc(t.id)}</code><span>${esc(t.name)}</span><small>${status[t.id] && status[t.id].running ? '运行中 pid='+esc(status[t.id].pid) : '已停止'}</small><button class="danger" onclick="del('/tunnels/${encodeURIComponent(t.id)}')">删除</button></div>`);
+}
+function renderStun(items, status) {
+  $('stun').innerHTML = rows(items, t => `<div class="row"><code>${esc(t.id)}</code><span>${esc(t.server)}</span><small>${esc(status[t.id] ? (status[t.id].public_ip||'')+':'+(status[t.id].public_port||'') : '')}</small><button class="danger" onclick="del('/stun/${encodeURIComponent(t.id)}')">删除</button></div>`);
 }
 
 async function refresh() {
   try {
-    const status = await api('/status');
-    $('status').textContent = JSON.stringify(status, null, 2);
+    const s = await api('/status');
+    $('status').textContent = JSON.stringify(s, null, 2);
     renderSites(await api('/sites'));
     renderCerts(await api('/certs'));
-    const tasks = await api('/ddns');
-    renderDdns(tasks, status.ddns_status || {});
+    renderDdns(await api('/ddns'), s.ddns_status || {});
+    renderAcme(await api('/acme'));
+    renderWaf(await api('/waf/rules'));
+    const ts = await api('/tunnels/status'); renderTunnels(await api('/tunnels'), ts);
+    const ss = await api('/stun/status'); renderStun(await api('/stun'), ss);
+    $('bans').textContent = JSON.stringify(await api('/jail/bans'), null, 2);
+    const cfg = await api('/config');
+    $('jailEnabled').checked = cfg.jail.enabled;
+    $('jailLog').value = cfg.jail.log_path || '';
+    $('jailPatterns').value = (cfg.jail.patterns || []).join(',');
+    $('jailMax').value = cfg.jail.max_failures;
+    $('jailBackend').value = cfg.jail.backend;
+    $('totpSecret').value = cfg.auth.totp_secret || '';
+    $('requireTotp').checked = cfg.auth.require_totp;
+    $('oidcJson').value = JSON.stringify(cfg.auth.oidc || []);
   } catch (e) {
     $('status').textContent = '请求失败：' + e.message;
+    if (e.message.includes('401')) alert('可能需要密码或 TOTP');
   }
 }
 
+window.del = async path => { if (confirm('删除 '+path+'?')) { try { await api(path, {method:'DELETE'}); refresh(); } catch(e) { alert('失败：'+e.message); } } };
+window.runTask = async (path, label) => { try { const r = await api(path, {method:'POST'}); alert(label+' 完成：'+JSON.stringify(r)); } catch(e) { alert(label+' 失败：'+e.message); } refresh(); };
+
 $('loginBtn').onclick = async () => {
   try {
-    const data = await api('/login', {method:'POST', body:{password:$('password').value}});
-    token = data.token;
-    localStorage.setItem('gately_token', token);
-    $('who').textContent = '已登录';
-    refresh();
+    const d = await api('/login', {method:'POST', body:{password:$('password').value}});
+    token = d.token; localStorage.setItem('gately_token', token);
+    if ($('totp').value.trim()) {
+      await api('/login/totp', {method:'POST', body:{code:$('totp').value.trim()}});
+    }
+    $('who').textContent = '已登录'; refresh();
   } catch (e) { alert('登录失败：' + e.message); }
 };
-
 $('refreshBtn').onclick = refresh;
-$('reloadBtn').onclick = async () => {
-  try { await api('/config/reload', {method:'POST'}); refresh(); }
-  catch (e) { alert('重载失败：' + e.message); }
-};
+$('reloadBtn').onclick = async () => { try { await api('/config/reload',{method:'POST'}); refresh(); } catch(e) { alert(e.message); } };
 
 $('addSiteBtn').onclick = async () => {
-  try {
-    await api('/sites', {method:'POST', body:{
-      domains: $('siteDomains').value.split(',').map(x=>x.trim()).filter(Boolean),
-      backend: $('siteBackend').value.trim(),
-      listener: $('siteListener').value.trim() || null,
-    }});
-    refresh();
-  } catch (e) { alert('添加失败：' + e.message); }
+  try { await api('/sites',{method:'POST',body:{domains:$('siteDomains').value.split(',').map(x=>x.trim()).filter(Boolean),backend:$('siteBackend').value.trim(),listener:null}}); refresh(); } catch(e){ alert(e.message); }
 };
-
 $('addCertBtn').onclick = async () => {
-  try {
-    await api('/certs', {method:'POST', body:{
-      id: $('certId').value.trim(), cert_path: $('certPath').value.trim(), key_path: $('keyPath').value.trim(),
-    }});
-    refresh();
-  } catch (e) { alert('添加失败：' + e.message); }
+  try { await api('/certs',{method:'POST',body:{id:$('certId').value.trim(),cert_path:$('certPath').value.trim(),key_path:$('keyPath').value.trim()}}); refresh(); } catch(e){ alert(e.message); }
 };
-
+$('addAcmeBtn').onclick = async () => {
+  try { await api('/acme',{method:'POST',body:{id:$('acmeId').value.trim(),domains:$('acmeDomains').value.split(',').map(x=>x.trim()).filter(Boolean),email:$('acmeEmail').value.trim(),provider:'letsencrypt',directory:'',challenge:'http-01',cert_id:$('acmeCertId').value.trim(),auto_renew:true,renew_before_days:30}}); refresh(); } catch(e){ alert(e.message); }
+};
 $('addDdnsBtn').onclick = async () => {
-  const kind = $('ddnsKind').value;
-  const value = $('ddnsValue').value.trim();
+  const value = $('ddnsValue').value.trim(), kind = $('ddnsKind').value;
+  try { await api('/ddns',{method:'POST',body:{enabled:true,provider:'cloudflare',zone_id:$('ddnsZone').value.trim(),api_token:$('ddnsToken').value.trim(),name:$('ddnsName').value.trim(),record_type:$('ddnsType').value,ip_source:kind==='static'?{kind:'static',ip:value}:{kind:'url',url:value},interval_secs:300}}); refresh(); } catch(e){ alert(e.message); }
+};
+$('addWafBtn').onclick = async () => {
+  try { await api('/waf/rules',{method:'POST',body:{id:$('wafId').value.trim(),name:$('wafName').value.trim(),pattern:$('wafPattern').value, target:$('wafTarget').value,action:$('wafAction').value,enabled:true}}); refresh(); } catch(e){ alert(e.message); }
+};
+$('saveJailBtn').onclick = async () => {
+  try { await api('/jail',{method:'POST',body:{enabled:$('jailEnabled').checked,log_path:$('jailLog').value.trim(),patterns:$('jailPatterns').value.split(',').map(x=>x.trim()).filter(Boolean),max_failures:Number($('jailMax').value)||5,window_secs:600,ban_secs:3600,whitelist:[],backend:$('jailBackend').value,nft_table:'gately',nft_chain:'gately_jail'}}); refresh(); } catch(e){ alert(e.message); }
+};
+$('addTunBtn').onclick = async () => {
+  try { await api('/tunnels',{method:'POST',body:{id:$('tunId').value.trim(),name:$('tunName').value.trim(),binary:$('tunBinary').value.trim(),args:$('tunArgs').value.split(/\s+/).filter(Boolean),workdir:null,env:{},enabled:true,auto_restart:true}}); refresh(); } catch(e){ alert(e.message); }
+};
+$('addStunBtn').onclick = async () => {
+  try { await api('/stun',{method:'POST',body:{id:$('stunId').value.trim(),server:$('stunServer').value.trim(),enabled:true,interval_secs:300}}); refresh(); } catch(e){ alert(e.message); }
+};
+$('saveAuthBtn').onclick = async () => {
+  let oidc = []; try { oidc = JSON.parse($('oidcJson').value || '[]'); } catch(e) { alert('OIDC JSON 无效'); return; }
+  try { await api('/auth',{method:'POST',body:{totp_secret:$('totpSecret').value.trim()||null,require_totp:$('requireTotp').checked,oidc,oidc_allowed_users:[]}}); refresh(); } catch(e){ alert(e.message); }
+};
+
+$('historyBtn').onclick = async () => {
   try {
-    await api('/ddns', {method:'POST', body:{
-      enabled: $('ddnsEnabled').checked,
-      provider: 'cloudflare',
-      zone_id: $('ddnsZone').value.trim(),
-      api_token: $('ddnsToken').value.trim(),
-      name: $('ddnsName').value.trim(),
-      record_type: $('ddnsType').value,
-      ip_source: kind === 'static' ? {kind:'static', ip:value} : {kind:'url', url:value},
-      interval_secs: Number($('ddnsInterval').value) || 300,
-    }});
-    refresh();
-  } catch (e) { alert('添加失败：' + e.message); }
+    const ids = await api('/history');
+    $('history').innerHTML = rows(ids, id => `<div class="row"><code>${esc(id)}</code><button onclick="showDiff('${esc(id)}')">diff</button><button onclick="rollback('${esc(id)}')">回滚</button></div>`);
+  } catch(e) { alert(e.message); }
+};
+window.showDiff = async id => { try { $('status').textContent = await api('/history/'+encodeURIComponent(id)+'/diff'); } catch(e){ alert(e.message); } };
+window.rollback = async id => { if (!confirm('回滚到 '+id+'?')) return; try { await api('/history/'+encodeURIComponent(id)+'/rollback',{method:'POST'}); refresh(); } catch(e){ alert(e.message); } };
+$('importBtn').onclick = async () => {
+  try {
+    const r = await api('/import',{method:'POST',body:{paths:$('importPaths').value.split(',').map(x=>x.trim()).filter(Boolean),keep_enabled:$('keepEnabled').checked}});
+    $('importResult').textContent = JSON.stringify(r, null, 2); refresh();
+  } catch(e) { alert(e.message); }
 };
 
-window.delSite = async id => { if(confirm('删除站点 '+id+'?')) { await api('/sites/'+encodeURIComponent(id), {method:'DELETE'}); refresh(); } };
-window.delCert = async id => { if(confirm('删除证书 '+id+'?')) { await api('/certs/'+encodeURIComponent(id), {method:'DELETE'}); refresh(); } };
-window.delDdns = async id => { if(confirm('删除任务 '+id+'?')) { await api('/ddns/'+encodeURIComponent(id), {method:'DELETE'}); refresh(); } };
-window.runDdns = async id => {
-  try { const r = await api('/ddns/'+encodeURIComponent(id)+'/run', {method:'POST'}); alert('已更新到 ' + r.ip); }
-  catch (e) { alert('执行失败：' + e.message); }
-  refresh();
-};
-
+fetch('/api/login/oidc/providers').then(r=>r.json()).then(ps => {
+  $('oidc').innerHTML = ps.map(p => `<button onclick="location.href='/api/login/oidc/start?provider=${encodeURIComponent(p.id)}'">${esc(p.name)} 登录</button>`).join('');
+}).catch(()=>{});
 if (token) refresh();
 </script>
 </body>

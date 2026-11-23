@@ -1,8 +1,15 @@
+mod acme;
 mod admin;
+mod auth_ext;
 mod config;
 mod ddns;
+mod history;
+mod migrate;
 mod proxy;
 mod state;
+mod stun;
+mod tunnel;
+mod waf;
 
 use axum::Extension;
 use axum::Router;
@@ -16,6 +23,7 @@ use std::path::PathBuf;
 
 #[tokio::main]
 async fn main() {
+    let _ = rustls::crypto::ring::default_provider().install_default();
     let config_path = env::args()
         .nth(1)
         .map(PathBuf::from)
@@ -36,6 +44,22 @@ async fn main() {
 
     let state = AppState::new(config_path.clone(), config);
     ddns::spawn_ddns_loop(state.clone());
+    acme::spawn_acme_loop(state.clone());
+    stun::spawn_stun_loop(state.clone());
+    tunnel::spawn_tunnel_supervisor(state.clone());
+    waf::spawn_jail_loop(state.clone());
+
+    // ACME HTTP-01 challenge listener. Port 80 must be reachable from the public internet.
+    let challenge_state = state.clone();
+    tokio::spawn(async move {
+        match axum_server::bind("0.0.0.0:80".parse::<SocketAddr>().unwrap())
+            .serve(acme::challenge_router(challenge_state).into_make_service())
+            .await
+        {
+            Ok(_) => {}
+            Err(err) => eprintln!("[acme] challenge listener stopped: {err}"),
+        }
+    });
 
     for listener in listeners {
         let addr: SocketAddr = match listener.listen.parse() {
@@ -48,9 +72,7 @@ async fn main() {
 
         let router = Router::new()
             .fallback(proxy_handler)
-            .layer(Extension(ListenerCtx {
-                name: listener.name.clone(),
-            }))
+            .layer(Extension(ListenerCtx { name: listener.name.clone() }))
             .with_state(state.clone());
 
         match &listener.tls_cert {
@@ -62,16 +84,13 @@ async fn main() {
                             let name = listener.name.clone();
                             tokio::spawn(async move {
                                 if let Err(err) = axum_server::bind_rustls(addr, tls)
-                                    .serve(router.into_make_service())
-                                    .await
+                                    .serve(router.into_make_service()).await
                                 {
                                     eprintln!("[listener {name}] stopped: {err}");
                                 }
                             });
                         }
-                        Err(err) => {
-                            eprintln!("[listener {}] tls load failed: {}", listener.name, err);
-                        }
+                        Err(err) => eprintln!("[listener {}] tls load failed: {}", listener.name, err),
                     },
                     None => eprintln!("[listener {}] certificate {} not found", listener.name, cert_id),
                 }
@@ -80,8 +99,7 @@ async fn main() {
                 let name = listener.name.clone();
                 tokio::spawn(async move {
                     if let Err(err) = axum_server::bind(addr)
-                        .serve(router.into_make_service())
-                        .await
+                        .serve(router.into_make_service()).await
                     {
                         eprintln!("[listener {name}] stopped: {err}");
                     }
@@ -103,9 +121,10 @@ async fn main() {
     println!("admin:  http://{admin_addr}/  (token: {admin_token})");
 
     if let Err(err) = axum_server::bind(admin_addr)
-        .serve(admin::admin_router(state).into_make_service())
+        .serve(admin::admin_router(state.clone()).into_make_service())
         .await
     {
         eprintln!("admin server stopped: {err}");
     }
+    tunnel::stop_all(&state).await;
 }

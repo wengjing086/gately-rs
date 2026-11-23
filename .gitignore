@@ -1,5 +1,5 @@
 /target/
-/.smoke/
+/.smoke*/
 /.cargo/
 gately.json
 *.json.tmp

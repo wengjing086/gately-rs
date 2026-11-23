@@ -1,6 +1,6 @@
 [package]
 name = "gately-rs"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2024"
 
 [dependencies]
@@ -9,7 +9,20 @@ tokio = { version = "1", features = ["full"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json"] }
-rustls = "0.23"
+rustls = { version = "0.23", default-features = false, features = ["ring", "tls12", "logging", "std"] }
 rustls-pemfile = "2"
 axum-server = { version = "0.7", features = ["tls-rustls"] }
 chrono = { version = "0.4", default-features = false, features = ["clock", "std", "serde"] }
+hyper = "1"
+hyper-util = "0.1"
+similar = "3"
+regex = "1"
+instant-acme = { version = "0.8", default-features = false, features = ["ring", "hyper-rustls", "rcgen"] }
+hmac = "0.12"
+sha1 = "0.10"
+sha2 = "0.11"
+base32 = "0.5"
+base64 = "0.23"
+url = "2"
+uuid = { version = "1", features = ["v4"] }
+zip = "2"

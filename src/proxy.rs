@@ -1,11 +1,17 @@
+use crate::config::SiteConfig;
 use crate::state::AppState;
+use crate::waf;
 use axum::body::{Body, to_bytes};
 use axum::extract::{Extension, Request, State};
 use axum::http::StatusCode;
 use axum::http::header::{AUTHORIZATION, CONNECTION, CONTENT_LENGTH, HOST, TRANSFER_ENCODING, UPGRADE};
-use axum::http::{HeaderMap, HeaderName};
+use axum::http::{HeaderMap, HeaderName, HeaderValue};
 use axum::response::{IntoResponse, Response};
+use base64::Engine;
+use std::collections::HashMap;
 use std::str::FromStr;
+use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
+use tokio::net::TcpStream;
 
 #[derive(Clone, Debug)]
 pub struct ListenerCtx {
@@ -27,76 +33,156 @@ fn hop_by_hop(name: &str) -> bool {
     )
 }
 
+fn client_ip(headers: &HeaderMap) -> String {
+    headers.get("x-forwarded-for")
+        .and_then(|v| v.to_str().ok())
+        .and_then(|v| v.split(',').next())
+        .or_else(|| headers.get("x-real-ip").and_then(|v| v.to_str().ok()))
+        .unwrap_or("")
+        .trim().to_string()
+}
+
+async fn find_site(state: &AppState, host: &str, listener: &str) -> Option<SiteConfig> {
+    let config = state.config.read().await;
+    config.sites.iter().find(|s| {
+        let listener_ok = match &s.listener { Some(name) => name == listener, None => true };
+        listener_ok && s.domains.iter().any(|d| d == "*" || d.eq_ignore_ascii_case(host))
+    }).cloned()
+}
+
+fn is_websocket(req: &Request) -> bool {
+    let upgrade = req.headers().get(UPGRADE).and_then(|v| v.to_str().ok()).unwrap_or("");
+    let connection = req.headers().get(CONNECTION).and_then(|v| v.to_str().ok()).unwrap_or("");
+    upgrade.eq_ignore_ascii_case("websocket") && connection.to_ascii_lowercase().contains("upgrade")
+}
+
+async fn websocket_proxy(state: &AppState, mut req: Request, site: &SiteConfig) -> Response {
+    let url = match reqwest::Url::parse(&site.backend) {
+        Ok(u) => u,
+        Err(err) => return (StatusCode::BAD_GATEWAY, format!("bad backend: {err}")).into_response(),
+    };
+    let host = url.host_str().unwrap_or("127.0.0.1");
+    let port = url.port_or_known_default().unwrap_or(80);
+    let backend = match TcpStream::connect((host, port)).await {
+        Ok(s) => s,
+        Err(err) => return (StatusCode::BAD_GATEWAY, format!("backend error: {err}")).into_response(),
+    };
+    let mut backend = BufReader::new(backend);
+    let mut request_bytes = format!("{} {} {:?}\r\n", req.method(), req.uri(), req.version()).into_bytes();
+    for (name, value) in req.headers() {
+        request_bytes.extend_from_slice(format!("{}: {}\r\n", name, value.to_str().unwrap_or("")).as_bytes());
+    }
+    request_bytes.extend_from_slice(b"\r\n");
+    if let Err(err) = backend.write_all(&request_bytes).await {
+        return (StatusCode::BAD_GATEWAY, format!("backend write: {err}")).into_response();
+    }
+    // Consume the backend's own handshake response; only raw frames are forwarded to the client.
+    let mut line = Vec::new();
+    let mut handshake = Vec::new();
+    loop {
+        line.clear();
+        let n = match backend.read_until(b'\n', &mut line).await {
+            Ok(n) => n,
+            Err(err) => return (StatusCode::BAD_GATEWAY, format!("backend handshake: {err}")).into_response(),
+        };
+        if n == 0 { return (StatusCode::BAD_GATEWAY, "backend closed handshake").into_response(); }
+        handshake.extend_from_slice(&line);
+        if line == b"\r\n" || line == b"\n" { break; }
+        if handshake.len() > 8192 { return (StatusCode::BAD_GATEWAY, "backend handshake too large").into_response(); }
+    }
+    if !handshake.starts_with(b"HTTP/1.1 101") && !handshake.starts_with(b"HTTP/1.0 101") {
+        return (StatusCode::BAD_GATEWAY, "backend rejected websocket upgrade").into_response();
+    }
+
+    let key = req.headers().get("sec-websocket-key").and_then(|v| v.to_str().ok()).unwrap_or("").to_string();
+    if key.is_empty() {
+        return (StatusCode::BAD_REQUEST, "missing sec-websocket-key").into_response();
+    }
+    use sha1::{Digest, Sha1};
+    let mut sha = Sha1::new();
+    sha.update(format!("{key}258EAFA5-E914-47DA-95CA-C5AB0DC85B11"));
+    let accept = base64::engine::general_purpose::STANDARD.encode(sha.finalize());
+
+    let mut response = Response::builder()
+        .status(StatusCode::SWITCHING_PROTOCOLS)
+        .header(CONNECTION, HeaderValue::from_static("Upgrade"))
+        .header(UPGRADE, HeaderValue::from_static("websocket"))
+        .header("sec-websocket-accept", accept)
+        .body(Body::empty())
+        .unwrap();
+
+    tokio::spawn(async move {
+        let upgraded = match hyper::upgrade::on(&mut req).await {
+            Ok(u) => u,
+            Err(err) => { eprintln!("[ws] upgrade: {err}"); return; }
+        };
+        let mut client = hyper_util::rt::TokioIo::new(upgraded);
+        if let Err(err) = tokio::io::copy_bidirectional(&mut client, &mut backend).await {
+            eprintln!("[ws] tunnel: {err}");
+        }
+    });
+    response
+}
+
 pub async fn proxy_handler(
     State(state): State<AppState>,
     Extension(ctx): Extension<ListenerCtx>,
     req: Request,
 ) -> Response {
-    let host = req
-        .headers()
-        .get(HOST)
+    let host = req.headers().get(HOST)
         .and_then(|v| v.to_str().ok())
         .map(|h| h.split(':').next().unwrap_or(h).to_ascii_lowercase())
         .unwrap_or_default();
 
-    let (parts, body) = req.into_parts();
-
-    let site = {
-        let cfg = state.config.read().await;
-        cfg.sites
-            .iter()
-            .find(|s| {
-                let listener_ok = match &s.listener {
-                    Some(name) => name == &ctx.name,
-                    None => true,
-                };
-                listener_ok
-                    && s.domains
-                        .iter()
-                        .any(|d| d == "*" || d.eq_ignore_ascii_case(&host))
-            })
-            .cloned()
-    };
-
-    let site = match site {
+    let site = match find_site(&state, &host, &ctx.name).await {
         Some(s) => s,
         None => return (StatusCode::NOT_FOUND, "no matching site").into_response(),
     };
 
-    let path_and_query = parts
-        .uri
-        .path_and_query()
-        .map(|p| p.as_str())
-        .unwrap_or("/");
-    let url = format!("{}{}", site.backend.trim_end_matches('/'), path_and_query);
-
-    let mut out_headers = HeaderMap::new();
-    for (name, value) in parts.headers.iter() {
-        if hop_by_hop(name.as_str()) {
-            continue;
-        }
-        if let Ok(name) = HeaderName::from_str(name.as_str()) {
-            out_headers.append(name, value.clone());
-        }
+    let ip = client_ip(req.headers());
+    if !ip.is_empty() && waf::is_banned(&state, &ip).await {
+        return (StatusCode::FORBIDDEN, "ip banned").into_response();
     }
 
+    if is_websocket(&req) {
+        return websocket_proxy(&state, req, &site).await;
+    }
+
+    let (parts, body) = req.into_parts();
     let bytes = match to_bytes(body, 16 * 1024 * 1024).await {
         Ok(bytes) => bytes,
         Err(_) => return (StatusCode::PAYLOAD_TOO_LARGE, "body too large").into_response(),
     };
 
-    let upstream = match state
-        .client
-        .request(parts.method, url)
-        .headers(out_headers)
-        .body(bytes)
-        .send()
-        .await
-    {
+    let mut headers = HashMap::new();
+    for (name, value) in parts.headers.iter() {
+        if let Ok(v) = value.to_str() { headers.insert(name.as_str().to_ascii_lowercase(), v.to_string()); }
+    }
+    let query = parts.uri.query().unwrap_or("").to_string();
+    let path = parts.uri.path().to_string();
+    let decision = {
+        let config = state.config.read().await;
+        waf::evaluate(&config, &site, &path, &query, &headers, &String::from_utf8_lossy(&bytes))
+    };
+    match decision {
+        waf::Decision::Deny(msg) => return (StatusCode::FORBIDDEN, msg).into_response(),
+        waf::Decision::Log(msg) => eprintln!("[waf] {msg}"),
+        waf::Decision::Allow => {}
+    }
+
+    let path_and_query = parts.uri.path_and_query().map(|p| p.as_str()).unwrap_or("/");
+    let url = format!("{}{}", site.backend.trim_end_matches('/'), path_and_query);
+
+    let mut out_headers = HeaderMap::new();
+    for (name, value) in parts.headers.iter() {
+        if hop_by_hop(name.as_str()) { continue; }
+        if let Ok(name) = HeaderName::from_str(name.as_str()) { out_headers.append(name, value.clone()); }
+    }
+
+    let upstream = match state.client.request(parts.method, url)
+        .headers(out_headers).body(bytes).send().await {
         Ok(resp) => resp,
-        Err(err) => {
-            return (StatusCode::BAD_GATEWAY, format!("backend error: {err}")).into_response();
-        }
+        Err(err) => return (StatusCode::BAD_GATEWAY, format!("backend error: {err}")).into_response(),
     };
 
     let status = upstream.status();
@@ -108,17 +194,12 @@ pub async fn proxy_handler(
             || name == UPGRADE
             || name == AUTHORIZATION
             || name == CONTENT_LENGTH
-        {
-            continue;
-        }
-        if let Ok(name) = HeaderName::from_str(name.as_str()) {
-            builder = builder.header(name, value.clone());
-        }
+        { continue; }
+        if let Ok(name) = HeaderName::from_str(name.as_str()) { builder = builder.header(name, value.clone()); }
     }
 
     match upstream.bytes().await {
-        Ok(body) => builder
-            .body(Body::from(body))
+        Ok(body) => builder.body(Body::from(body))
             .unwrap_or_else(|err| (StatusCode::INTERNAL_SERVER_ERROR, err.to_string()).into_response()),
         Err(err) => (StatusCode::BAD_GATEWAY, format!("read backend body: {err}")).into_response(),
     }

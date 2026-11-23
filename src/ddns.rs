@@ -28,12 +28,23 @@ fn cf_errors(env: &CfEnvelope) -> String {
         .join("; ")
 }
 
-async fn resolve_ip(client: &reqwest::Client, source: &IpSource) -> Result<String, String> {
+async fn resolve_ip(state: &AppState, source: &IpSource) -> Result<String, String> {
     match source {
         IpSource::Static { ip } => Ok(ip.trim().to_string()),
         IpSource::Url { url } => {
-            let text = client
-                .get(url)
+            let mut url = url.clone();
+            let statuses = state.stun_status.read().await;
+            for (id, status) in statuses.iter() {
+                if let Some(ip) = &status.public_ip {
+                    url = url.replace(&format!("{{STUN_{id}_ADDR}}"), ip);
+                }
+                if let Some(port) = status.public_port {
+                    url = url.replace(&format!("{{STUN_{id}_PORT}}"), &port.to_string());
+                }
+            }
+            drop(statuses);
+            let text = state.client
+                .get(&url)
                 .send()
                 .await
                 .map_err(|e| format!("fetch ip: {e}"))?
@@ -114,7 +125,7 @@ async fn run_task_inner(state: &AppState, id: &str) -> Result<String, String> {
         return Err(format!("unsupported provider: {}", task.provider));
     }
 
-    let ip = resolve_ip(&state.client, &task.ip_source).await?;
+    let ip = resolve_ip(state, &task.ip_source).await?;
     if ip.is_empty() {
         return Err("resolved ip is empty".into());
     }
@@ -124,6 +135,9 @@ async fn run_task_inner(state: &AppState, id: &str) -> Result<String, String> {
         let mut cfg = state.config.write().await;
         if let Some(t) = cfg.ddns.iter_mut().find(|t| t.id == id) {
             t.last_ip = Some(ip.clone());
+        }
+        if let Ok(text) = std::fs::read_to_string(&state.config_path) {
+            let _ = crate::history::snapshot(&state.config_path, &text);
         }
         cfg.save(&state.config_path)?;
     }
