@@ -2,7 +2,7 @@
 
 用 Rust 编写的边缘网关，借鉴 [Gately](https://github.com/wangwanjie/gately) 的功能设计，是一个**独立的重新实现**。
 
-> 非官方项目，与上游 Gately 无隶属关系。v0.2.1 补齐了配置历史、ACME、WAF、封禁、STUN、隧道托管、TOTP/OIDC、WebSocket，并提供了 Windows / Linux x86_64 / Linux ARM64 三个平台的 Release 二进制。管理后台已按原版 Gately 的分组侧边栏 + 顶栏 + 卡片风格重做，但仍是**内网可用的 MVP**，不建议无防护地直接暴露到公网。
+> 非官方项目，与上游 Gately 无隶属关系。v0.2.2 补齐了配置历史、ACME、WAF、封禁、STUN、隧道托管、TOTP/OIDC、WebSocket，并提供了 Windows / Linux x86_64 / Linux ARM64 三个平台的 Release 二进制。管理后台已按原版 Gately 的分组侧边栏 + 顶栏 + 卡片风格重做，但仍是**内网可用的 MVP**，不建议无防护地直接暴露到公网。
 
 ## 已实现功能
 
@@ -41,15 +41,15 @@ Releases 页面提供三个平台的产物，均带 `.sha256` 校验文件：
 
 | 平台 | 文件名 | 说明 |
 |---|---|---|
-| Windows x86_64 | `gately-rs-v0.2.1-windows-x86_64.exe` | GNU 工具链静态链接 |
-| Linux x86_64 | `gately-rs-v0.2.1-linux-x86_64` | musl 静态二进制，无需额外 libc |
-| Linux ARM64 | `gately-rs-v0.2.1-linux-arm64` | musl 静态二进制，适用于树莓派 64 位 / ARM 服务器 |
+| Windows x86_64 | `gately-rs-v0.2.2-windows-x86_64.exe` | GNU 工具链静态链接 |
+| Linux x86_64 | `gately-rs-v0.2.2-linux-x86_64` | musl 静态二进制，无需额外 libc |
+| Linux ARM64 | `gately-rs-v0.2.2-linux-arm64` | musl 静态二进制，适用于树莓派 64 位 / ARM 服务器 |
 
 Linux 下使用：
 
 ```bash
-chmod +x gately-rs-v0.2.1-linux-x86_64
-./gately-rs-v0.2.1-linux-x86_64 ./gately.json
+chmod +x gately-rs-v0.2.2-linux-x86_64
+./gately-rs-v0.2.2-linux-x86_64 ./gately.json
 ```
 
 ## 快速开始

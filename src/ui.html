@@ -473,11 +473,12 @@ async function refreshData(){
       api('/tunnels'),api('/stun'),api('/history'),api('/jail/bans')]);
     Object.assign(C,{sites,certs,ddns,acme,waf,profiles,tunnels,stun,history,bans});
     try{C.config=await api('/config')}catch{}
-    $('app').style.display='';$('login').classList.add('hide');
+    $('app').style.display='block';$('login').classList.add('hide');
     $('sideVer').textContent='v'+(s.version||'0.2.0');
     renderPage();
   }catch(e){
     if(String(e.message).includes('401')){showLogin();return}
+    $('app').style.display='block';$('login').classList.add('hide');
     toast('刷新失败：'+e.message,'err');
   }
 }
