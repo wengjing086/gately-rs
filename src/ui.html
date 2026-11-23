@@ -1,0 +1,216 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>gately-rs MVP</title>
+<style>
+body{font-family:system-ui,-apple-system,"Segoe UI",sans-serif;margin:0;background:#f6f7f9;color:#1f2328}
+header{background:#fff;border-bottom:1px solid #d8dee4;padding:14px 24px;display:flex;gap:16px;align-items:center}
+header h1{font-size:18px;margin:0}
+main{max-width:1080px;margin:24px auto;padding:0 20px;display:grid;gap:16px}
+.card{background:#fff;border:1px solid #d8dee4;border-radius:8px;padding:16px}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:6px 0}
+input,select,button{font:inherit;padding:6px 9px;border:1px solid #d0d7de;border-radius:6px}
+button{cursor:pointer;background:#f3f4f6}
+button.primary{background:#1f883d;color:#fff;border-color:#1f883d}
+button.danger{color:#b42318;border-color:#f3b4ad}
+pre{background:#f6f8fa;padding:10px;border-radius:6px;overflow:auto;font-size:12px}
+small{color:#656d76}
+code{background:#f6f8fa;padding:2px 5px;border-radius:4px}
+</style>
+</head>
+<body>
+<header>
+  <h1>gately-rs MVP</h1>
+  <input id="password" type="password" placeholder="admin password" style="width:170px">
+  <button class="primary" id="loginBtn">登录</button>
+  <span id="who"></span>
+</header>
+<main>
+  <section class="card">
+    <h3>状态</h3>
+    <div class="row"><button id="refreshBtn">刷新</button><button id="reloadBtn">从磁盘重载配置</button></div>
+    <pre id="status">未登录</pre>
+  </section>
+
+  <section class="card">
+    <h3>Web 站点（反向代理）</h3>
+    <div class="row">
+      <input id="siteDomains" placeholder="域名，逗号分隔，如 localhost,example.com" style="width:310px">
+      <input id="siteBackend" placeholder="后端，如 http://127.0.0.1:3000" style="width:280px">
+      <input id="siteListener" placeholder="监听器名（可空）" style="width:150px">
+      <button class="primary" id="addSiteBtn">添加</button>
+    </div>
+    <div id="sites"></div>
+  </section>
+
+  <section class="card">
+    <h3>TLS 证书（静态 PEM，重启后监听生效）</h3>
+    <div class="row">
+      <input id="certId" placeholder="证书 ID，如 default" style="width:150px">
+      <input id="certPath" placeholder="cert.pem 路径" style="width:280px">
+      <input id="keyPath" placeholder="key.pem 路径" style="width:280px">
+      <button class="primary" id="addCertBtn">添加</button>
+    </div>
+    <div id="certs"></div>
+  </section>
+
+  <section class="card">
+    <h3>动态域名（MVP 仅 Cloudflare）</h3>
+    <div class="row">
+      <input id="ddnsName" placeholder="记录名，如 nas.example.com" style="width:220px">
+      <input id="ddnsZone" placeholder="Zone ID" style="width:200px">
+      <input id="ddnsToken" type="password" placeholder="API Token" style="width:200px">
+      <select id="ddnsType"><option>A</option><option>AAAA</option></select>
+      <select id="ddnsKind"><option value="static">静态 IP</option><option value="url">URL 获取</option></select>
+      <input id="ddnsValue" placeholder="IP 或取 IP 的 URL" style="width:220px">
+      <input id="ddnsInterval" type="number" value="300" style="width:100px" title="检查周期（秒，最小 30）">
+      <label><input id="ddnsEnabled" type="checkbox" checked> 启用</label>
+      <button class="primary" id="addDdnsBtn">添加</button>
+    </div>
+    <div id="ddns"></div>
+  </section>
+</main>
+
+<script>
+const $ = id => document.getElementById(id);
+let token = localStorage.getItem('gately_token') || '';
+if (token) $('who').textContent = '已保存 token';
+
+async function api(path, options = {}) {
+  const opts = Object.assign({}, options);
+  opts.headers = Object.assign({}, opts.headers || {});
+  if (token) opts.headers['Authorization'] = 'Bearer ' + token;
+  if (opts.body && typeof opts.body !== 'string') {
+    opts.headers['Content-Type'] = 'application/json';
+    opts.body = JSON.stringify(opts.body);
+  }
+  const resp = await fetch('/api' + path, opts);
+  const text = await resp.text();
+  let data;
+  try { data = JSON.parse(text); } catch { data = text; }
+  if (!resp.ok) throw new Error(typeof data === 'string' ? data : JSON.stringify(data));
+  return data;
+}
+
+function esc(v) {
+  return String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+function renderSites(items) {
+  $('sites').innerHTML = items.length ? items.map(s => `
+    <div class="row">
+      <code>${esc(s.id)}</code>
+      <span>${esc(s.domains.join(', '))}</span>
+      <small>→ ${esc(s.backend)}</small>
+      ${s.listener ? `<small>[${esc(s.listener)}]</small>` : ''}
+      <button class="danger" onclick="delSite('${esc(s.id)}')">删除</button>
+    </div>`).join('') : '<small>暂无站点</small>';
+}
+
+function renderCerts(items) {
+  $('certs').innerHTML = items.length ? items.map(c => `
+    <div class="row">
+      <code>${esc(c.id)}</code>
+      <small>${esc(c.cert_path)} / ${esc(c.key_path)}</small>
+      <button class="danger" onclick="delCert('${esc(c.id)}')">删除</button>
+    </div>`).join('') : '<small>暂无证书</small>';
+}
+
+function renderDdns(items, status) {
+  $('ddns').innerHTML = items.length ? items.map(t => {
+    const st = status[t.id] || {};
+    const ipSrc = t.ip_source.kind === 'static' ? t.ip_source.ip : t.ip_source.url;
+    return `<div class="row">
+      <code>${esc(t.id)}</code>
+      <span>${esc(t.name)} (${esc(t.record_type)})</span>
+      <small>${t.enabled ? '启用' : '停用'} · ${esc(ipSrc)}</small>
+      <small>最近 IP: ${esc(st.last_ip || t.last_ip || '-')}</small>
+      ${st.last_error ? `<small style="color:#b42318">${esc(st.last_error)}</small>` : ''}
+      <button onclick="runDdns('${esc(t.id)}')">立即执行</button>
+      <button class="danger" onclick="delDdns('${esc(t.id)}')">删除</button>
+    </div>`;
+  }).join('') : '<small>暂无任务</small>';
+}
+
+async function refresh() {
+  try {
+    const status = await api('/status');
+    $('status').textContent = JSON.stringify(status, null, 2);
+    renderSites(await api('/sites'));
+    renderCerts(await api('/certs'));
+    const tasks = await api('/ddns');
+    renderDdns(tasks, status.ddns_status || {});
+  } catch (e) {
+    $('status').textContent = '请求失败：' + e.message;
+  }
+}
+
+$('loginBtn').onclick = async () => {
+  try {
+    const data = await api('/login', {method:'POST', body:{password:$('password').value}});
+    token = data.token;
+    localStorage.setItem('gately_token', token);
+    $('who').textContent = '已登录';
+    refresh();
+  } catch (e) { alert('登录失败：' + e.message); }
+};
+
+$('refreshBtn').onclick = refresh;
+$('reloadBtn').onclick = async () => {
+  try { await api('/config/reload', {method:'POST'}); refresh(); }
+  catch (e) { alert('重载失败：' + e.message); }
+};
+
+$('addSiteBtn').onclick = async () => {
+  try {
+    await api('/sites', {method:'POST', body:{
+      domains: $('siteDomains').value.split(',').map(x=>x.trim()).filter(Boolean),
+      backend: $('siteBackend').value.trim(),
+      listener: $('siteListener').value.trim() || null,
+    }});
+    refresh();
+  } catch (e) { alert('添加失败：' + e.message); }
+};
+
+$('addCertBtn').onclick = async () => {
+  try {
+    await api('/certs', {method:'POST', body:{
+      id: $('certId').value.trim(), cert_path: $('certPath').value.trim(), key_path: $('keyPath').value.trim(),
+    }});
+    refresh();
+  } catch (e) { alert('添加失败：' + e.message); }
+};
+
+$('addDdnsBtn').onclick = async () => {
+  const kind = $('ddnsKind').value;
+  const value = $('ddnsValue').value.trim();
+  try {
+    await api('/ddns', {method:'POST', body:{
+      enabled: $('ddnsEnabled').checked,
+      provider: 'cloudflare',
+      zone_id: $('ddnsZone').value.trim(),
+      api_token: $('ddnsToken').value.trim(),
+      name: $('ddnsName').value.trim(),
+      record_type: $('ddnsType').value,
+      ip_source: kind === 'static' ? {kind:'static', ip:value} : {kind:'url', url:value},
+      interval_secs: Number($('ddnsInterval').value) || 300,
+    }});
+    refresh();
+  } catch (e) { alert('添加失败：' + e.message); }
+};
+
+window.delSite = async id => { if(confirm('删除站点 '+id+'?')) { await api('/sites/'+encodeURIComponent(id), {method:'DELETE'}); refresh(); } };
+window.delCert = async id => { if(confirm('删除证书 '+id+'?')) { await api('/certs/'+encodeURIComponent(id), {method:'DELETE'}); refresh(); } };
+window.delDdns = async id => { if(confirm('删除任务 '+id+'?')) { await api('/ddns/'+encodeURIComponent(id), {method:'DELETE'}); refresh(); } };
+window.runDdns = async id => {
+  try { const r = await api('/ddns/'+encodeURIComponent(id)+'/run', {method:'POST'}); alert('已更新到 ' + r.ip); }
+  catch (e) { alert('执行失败：' + e.message); }
+  refresh();
+};
+
+if (token) refresh();
+</script>
+</body>
+</html>

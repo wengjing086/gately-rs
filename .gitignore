@@ -1,0 +1,6 @@
+/target/
+/.smoke/
+/.cargo/
+gately.json
+*.json.tmp
+.DS_Store

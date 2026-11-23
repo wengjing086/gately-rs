@@ -1,0 +1,9 @@
+gately-rs
+Copyright 2026 wengjing086
+
+This project is an independent Rust reimplementation inspired by the feature
+design of Gately (https://github.com/wangwanjie/gately), which is licensed
+under the Apache License, Version 2.0.
+
+gately-rs is not affiliated with, endorsed by, or officially connected to the
+Gately project. It is an early-stage MVP and does not provide feature parity.
