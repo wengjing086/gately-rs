@@ -32,6 +32,13 @@ svg{width:18px;height:18px;flex:none;stroke:currentColor;fill:none;stroke-width:
 .hide{display:none!important}
 
 
+
+/* ---------- hub 汇总页标签栏 ---------- */
+.hubtabs{display:flex;gap:4px;flex-wrap:wrap;border-bottom:1px solid var(--border);margin-bottom:16px;padding-bottom:0}
+.hubtab{border:0;background:transparent;color:var(--text2);font-size:13px;padding:9px 14px;cursor:pointer;border-bottom:2px solid transparent;border-radius:0;white-space:nowrap}
+.hubtab:hover{color:var(--accent);background:var(--accent-soft)}
+.hubtab.active{color:var(--accent);border-bottom-color:var(--accent);font-weight:600}
+
 /* ---------- 全局搜索 ---------- */
 .gsearch{position:fixed;inset:0;z-index:120;background:rgba(15,17,19,.55);backdrop-filter:blur(3px);display:flex;align-items:flex-start;justify-content:center;padding-top:12vh}
 .gsearch-box{width:min(680px,92vw);background:var(--surface);border:1px solid var(--border);border-radius:14px;box-shadow:0 24px 60px -30px rgba(0,0,0,.6);overflow:hidden}
@@ -264,24 +271,63 @@ const ICON={
  settings:'M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6ZM19 12a7 7 0 0 0-.1-1l2-1.5-2-3.4-2.4 1a7 7 0 0 0-1.7-1L14.5 3h-4l-.3 2.1a7 7 0 0 0-1.7 1l-2.4-1-2 3.4L6.1 11a7 7 0 0 0 0 2l-2 1.5 2 3.4 2.4-1a7 7 0 0 0 1.7 1l.3 2.1h4l.3-2.1a7 7 0 0 0 1.7-1l2.4 1 2-3.4-2-1.5c.1-.3.1-.7.1-1Z',
  import:'M12 3v12m0 0 4-4m-4 4-4-4M4 17v3h16v-3',
  log:'M5 4h14v16H5zM8 8h8M8 12h8M8 16h5',
- plus:'M12 5v14M5 12h14', trash:'M4 7h16M9 7V4h6v3m-9 0 1 13h10l1-13', play:'m8 5 11 7-11 7V5Z', history:'M3 12a9 9 0 1 0 3-6.7M3 4v5h5M12 7v5l4 2'
+ plus:'M12 5v14M5 12h14', trash:'M4 7h16M9 7V4h6v3m-9 0 1 13h10l1-13', play:'m8 5 11 7-11 7V5Z', history:'M3 12a9 9 0 1 0 3-6.7M3 4v5h5M12 7v5l4 2',
+ split:'M6 3v6a3 3 0 0 0 3 3h6a3 3 0 0 1 3 3v6M3 6l3-3 3 3M15 21l3-3 3 3',
+ shieldban:'M12 2 4 5v6c0 5 3.4 9.4 8 11 4.6-1.6 8-6 8-11V5l-8-3ZM5 5l14 14',
+ shieldcheck:'M12 2 4 5v6c0 5 3.4 9.4 8 11 4.6-1.6 8-6 8-11V5l-8-3Zm-3 10 2 2 4-4',
+ workflow:'M4 4h6v6H4zM14 14h6v6h-6zM10 7h4a3 3 0 0 1 3 3v4',
+ footprints:'M4 12c0-2 2-3 4-3s4 1 4 3v3H4zM12 15c0-2 2-3 4-3s4 1 4 3v2h-8z',
+ grid:'M3 3h7v7H3zM14 3h7v7h-7zM3 14h7v7H3zM14 14h7v7h-7z',
+ usercog:'M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8ZM4 21v-2a4 4 0 0 1 4-4h2M18 8a3 3 0 1 0 0-6',
+ network:'M12 3a3 3 0 1 0 0 6 3 3 0 0 0 0-6ZM5 15a3 3 0 1 0 0 6 3 3 0 0 0 0-6ZM19 15a3 3 0 1 0 0 6 3 3 0 0 0 0-6ZM10 9l-3 4M14 9l3 4',
+ bird:'M12 3c-4 0-7 3-7 7 0 3 2 6 6 7 2 .5 3 2 3 3 0-2 1-3 3-4 2-1 3-3 3-6 0-4-3-7-8-7ZM9 9h.01M15 9h.01M12 11l2 1-2 1',
+ cable:'M4 4v6a4 4 0 0 0 8 0V4M16 4v6a4 4 0 0 0 8 0V4M6 2v4M18 2v4M10 14v8M22 14v8',
+ waypoints:'M6 4a2 2 0 1 0 0 4 2 2 0 0 0 0-4ZM18 16a2 2 0 1 0 0 4 2 2 0 0 0 0-4ZM8 6l8 10',
+ cloud:'M6 18a4 4 0 0 1 0-8 5 5 0 0 1 9.6-1A4 4 0 1 1 18 18H6Z',
+ radar:'M12 12m-9 0a9 9 0 1 1 18 0 9 9 0 1 1-18 0ZM12 12l6-6M3 12h18M12 3v18',
+ foldersync:'M3 6h6l2 2h10v11H3zM12 13a3 3 0 1 0 3 3M12 13v3l2-1',
+ foldertree:'M3 4h7l2 2h9v5H3zM3 13h18v7H3z',
+ harddrive:'M3 5h18v6H3zM3 13h18v6H3zM7 8h.01M7 16h.01',
+ folderopen:'M3 7h6l2 2h10v10H3zM3 7l2-3h5l2 2',
+ users:'M9 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8ZM2 21v-2a4 4 0 0 1 4-4h6a4 4 0 0 1 4 4v2M17 11a3 3 0 1 0 0-6M18 14a4 4 0 0 1 4 4v3',
+ power:'M12 3v9M6.3 6.3a8 8 0 1 0 11.4 0',
+ terminal:'M4 4h16v16H4zM8 9l3 3-3 3M13 15h4',
+ activity:'M3 12h4l3-8 4 16 3-8h4',
+ container:'M4 6h16v12H4zM8 10h.01M12 10h.01M16 10h.01M8 14h.01M12 14h.01M16 14h.01',
+ calendar:'M4 6h16v15H4zM4 10h16M8 3v4M16 3v4',
+ bell:'M12 3a6 6 0 0 0-6 6v4l-2 3h16l-2-3V9a6 6 0 0 0-6-6ZM10 20h4',
+ gauge:'M12 14a2 2 0 1 0 0-4 2 2 0 0 0 0 4ZM4 18a9 9 0 1 1 16 0',
+ scroll:'M6 3h12v15a3 3 0 0 1-3 3H6a3 3 0 0 1-3-3V6a3 3 0 0 1 3-3ZM9 8h6M9 12h6M9 16h4',
+ clipboard:'M8 3h8v3H8zM6 5h12v16H6zM9 10h6M9 14h6',
+ book:'M4 4h7a3 3 0 0 1 3 3v14a3 3 0 0 0-3-3H4zM20 4h-3a3 3 0 0 0-3 3v14a3 3 0 0 1 3-3h3z',
+ info:'M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18ZM12 11v6M12 7h.01'
 };
 function ico(n){return '<svg viewBox="0 0 24 24"><path d="'+(ICON[n]||ICON.dashboard)+'"/></svg>'}
 
 const NAV=[
- {g:'',items:[{id:'overview',name:'总览',icon:'dashboard'}]},
- {g:'网络',items:[{id:'ddns',name:'动态域名',icon:'globe'},{id:'portforward',name:'端口转发',icon:'route'},{id:'protoroute',name:'协议分流',icon:'route'},{id:'stun',name:'STUN 探测',icon:'globe'},{id:'diag',name:'网络诊断',icon:'log'}]},
- {g:'安全',items:[{id:'waf',name:'WAF 规则',icon:'shield'},{id:'jail',name:'入侵防护',icon:'shield'},{id:'knock',name:'端口敲门',icon:'shield'},{id:'iplists',name:'IP 列表',icon:'shield'},{id:'siteusers',name:'站点用户',icon:'key'}]},
- {g:'Web 服务',items:[{id:'sites',name:'Web 站点',icon:'server'},{id:'certs',name:'TLS 证书',icon:'key'},{id:'acme',name:'ACME 证书',icon:'key'},{id:'topology',name:'网络拓扑',icon:'route'},{id:'stats',name:'访问统计',icon:'log'}]},
- {g:'隧道',items:[{id:'tunnels',name:'隧道托管',icon:'tunnel'}]},{g:'应用',items:[{id:'docker',name:'Docker 管理',icon:'settings'},{id:'terminal',name:'Web 终端',icon:'tunnel'},{id:'files',name:'文件服务',icon:'import'}]},
- {g:'系统',items:[{id:'notifications',name:'通知中心',icon:'log'},{id:'tasks',name:'计划任务',icon:'clock'},{id:'history',name:'配置历史',icon:'history'},{id:'audit',name:'审计日志',icon:'log'},{id:'import',name:'导入迁移',icon:'import'},{id:'auth',name:'认证安全',icon:'key'},{id:'system',name:'系统设置',icon:'settings'},{id:'update',name:'版本更新',icon:'history'}]}
+ {g:'',items:[{id:'/overview',name:'概览',icon:'dashboard'}]},
+ {g:'网络',items:[{id:'/portforward',name:'端口转发',icon:'route'},{id:'/protoroute',name:'协议分流',icon:'split'},{id:'/ddns',name:'动态域名',icon:'globe'}]},
+ {g:'安全',items:[{id:'/guard',name:'入侵防护',icon:'shieldban'},{id:'/knock',name:'端口敲门',icon:'key'},{id:'/waf',name:'WAF 防火墙',icon:'shield'}]},
+ {g:'Web',items:[{id:'/web',name:'Web 服务',icon:'server',hub:'/web'},{id:'/web/topology',name:'网络拓扑',icon:'workflow',tab:'/web'},{id:'/web/visitors',name:'访客审计',icon:'footprints',tab:'/web'},{id:'/web/panels',name:'导航面板',icon:'grid',tab:'/web'},{id:'/ssl',name:'SSL 证书',icon:'shieldcheck'},{id:'/webusers',name:'认证用户',icon:'usercog'}]},
+ {g:'组网与穿透',items:[{id:'/mesh',name:'组网',icon:'network',hub:'/mesh'},{id:'/mesh/tailscale',name:'Tailscale',icon:'network',tab:'/mesh'},{id:'/mesh/netbird',name:'NetBird',icon:'bird',tab:'/mesh'},{id:'/mesh/easytier',name:'EasyTier',icon:'cable',tab:'/mesh'},{id:'/frp',name:'frp',icon:'waypoints'},{id:'/cloudflared',name:'Cloudflare 隧道',icon:'cloud'},{id:'/stun',name:'STUN 穿透',icon:'radar'}]},
+ {g:'文件服务',items:[{id:'/files',name:'文件共享',icon:'foldersync',hub:'/files'},{id:'/files/webdav',name:'WebDAV',icon:'foldersync',tab:'/files'},{id:'/files/ftp',name:'FTP',icon:'server',tab:'/files'},{id:'/files/smb',name:'SMB',icon:'foldertree',tab:'/files'},{id:'/files/users',name:'共享用户',icon:'users',tab:'/files'},{id:'/storage',name:'存储挂载',icon:'harddrive'},{id:'/filebrowser',name:'File Browser',icon:'folderopen'}]},
+ {g:'工具',items:[{id:'/wol',name:'网络唤醒',icon:'power'},{id:'/terminal',name:'Web 终端',icon:'terminal'},{id:'/nettools',name:'网络诊断',icon:'activity'},{id:'/docker',name:'Docker 管理',icon:'container'},{id:'/cron',name:'计划任务',icon:'calendar'}]},
+ {g:'系统',items:[{id:'/notify',name:'通知中心',icon:'bell'},{id:'/perf',name:'性能监控',icon:'gauge'},{id:'/logs',name:'日志',icon:'scroll',hub:'/logs'},{id:'/logs/system',name:'系统日志',icon:'scroll',tab:'/logs'},{id:'/logs/audit',name:'操作审计',icon:'clipboard',tab:'/logs'},{id:'/logs/history',name:'配置历史',icon:'history',tab:'/logs'},{id:'/settings',name:'设置',icon:'settings'},{id:'/api-tokens',name:'API 令牌',icon:'key',hidden:true},{id:'/api-docs',name:'API 文档',icon:'book',hidden:true},{id:'/about',name:'关于',icon:'info'},{id:'/iplists',name:'IP 列表',icon:'shield',hidden:true},{id:'/update',name:'版本更新',icon:'history',hidden:true}]}
 ];
-const PAGES={overview:'总览',ddns:'动态域名',portforward:'端口转发',protoroute:'协议分流',waf:'WAF 规则',jail:'入侵防护',iplists:'IP 列表',siteusers:'站点用户',sites:'Web 站点',certs:'TLS 证书',acme:'ACME 证书',topology:'网络拓扑',stats:'访问统计',tunnels:'隧道托管',stun:'STUN 探测',notifications:'通知中心',tasks:'计划任务',history:'配置历史',audit:'审计日志',import:'导入迁移',auth:'认证安全',system:'系统设置',diag:'网络诊断',knock:'端口敲门',docker:'Docker 管理',terminal:'Web 终端',files:'文件服务',update:'版本更新'};
-
+const HUBS={
+ '/web':[{id:'/web',name:'站点'},{id:'/web/topology',name:'网络拓扑'},{id:'/web/visitors',name:'访客审计'},{id:'/web/panels',name:'导航面板'}],
+ '/mesh':[{id:'/mesh/tailscale',name:'Tailscale'},{id:'/mesh/netbird',name:'NetBird'},{id:'/mesh/easytier',name:'EasyTier'}],
+ '/files':[{id:'/files/webdav',name:'WebDAV'},{id:'/files/ftp',name:'FTP'},{id:'/files/smb',name:'SMB'},{id:'/files/users',name:'共享用户'}],
+ '/logs':[{id:'/logs/system',name:'系统日志'},{id:'/logs/audit',name:'操作审计'},{id:'/logs/history',name:'配置历史'}]
+};
+const LEGACY={sites:'/web',certs:'/ssl',acme:'/ssl',topology:'/web/topology',siteusers:'/webusers',tunnels:'/mesh',stun:'/stun',diag:'/nettools',waf:'/waf',jail:'/guard',knock:'/knock',docker:'/docker',terminal:'/terminal',files:'/files',notifications:'/notify',tasks:'/cron',history:'/logs/history',audit:'/logs/audit',stats:'/perf',system:'/settings',auth:'/settings',import:'/settings',update:'/update',overview:'/overview',ddns:'/ddns',portforward:'/portforward',protoroute:'/protoroute',iplists:'/iplists'};
+const PAGES={'/overview':'概览','/portforward':'端口转发','/protoroute':'协议分流','/ddns':'动态域名','/guard':'入侵防护','/knock':'端口敲门','/waf':'WAF 防火墙','/web':'Web 服务','/web/topology':'网络拓扑','/web/visitors':'访客审计','/web/panels':'导航面板','/ssl':'SSL 证书','/webusers':'认证用户','/mesh':'组网','/mesh/tailscale':'Tailscale','/mesh/netbird':'NetBird','/mesh/easytier':'EasyTier','/frp':'frp','/cloudflared':'Cloudflare 隧道','/stun':'STUN 穿透','/files':'文件共享','/files/webdav':'WebDAV','/files/ftp':'FTP','/files/smb':'SMB','/files/users':'共享用户','/storage':'存储挂载','/filebrowser':'File Browser','/wol':'网络唤醒','/terminal':'Web 终端','/nettools':'网络诊断','/docker':'Docker 管理','/cron':'计划任务','/notify':'通知中心','/perf':'性能监控','/logs':'日志','/logs/system':'系统日志','/logs/audit':'操作审计','/logs/history':'配置历史','/settings':'设置','/api-tokens':'API 令牌','/api-docs':'API 文档','/about':'关于','/iplists':'IP 列表','/update':'版本更新'};
+const ALLNAV=NAV.flatMap(g=>g.items);
+const hubOf=id=>{for(const h of Object.keys(HUBS))if(id===h||HUBS[h].some(t=>t.id===id))return h;return '';};
 const API_BASE=(function(){const p=location.pathname;return p.replace(/\/ui\/?$/,'').replace(/\/$/,'');})();
 const $=id=>document.getElementById(id);
 let token=localStorage.getItem('gately_token')||'';
-let current='overview', C={status:null,config:null,sites:[],certs:[],ddns:[],acme:[],waf:[],profiles:[],tunnels:[],stun:[],history:[],bans:[],forwards:[],routes:[],forwardStatus:{},routeStatus:{},channels:[],rules:[],tasks:[],taskStatus:{},iplists:[],siteusers:[],audit:[],system:null,stats:null,topology:null,knockRules:[],dockerContainers:[],terminalSessions:[],updateInfo:null,visitorAudit:null};
+let current='overview', C={status:null,config:null,sites:[],certs:[],ddns:[],acme:[],waf:[],profiles:[],tunnels:[],stun:[],history:[],bans:[],forwards:[],routes:[],forwardStatus:{},routeStatus:{},channels:[],rules:[],tasks:[],taskStatus:{},iplists:[],siteusers:[],audit:[],system:null,stats:null,topology:null,knockRules:[],dockerContainers:[],terminalSessions:[],updateInfo:null,visitorAudit:null,wolHosts:[],storageMounts:[],fbStatus:null,smbStatus:null,perfSnapshot:null};
 const split=v=>String(v||'').split(',').map(x=>x.trim()).filter(Boolean);
 const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const short=v=>{v=String(v??'');return v.length>34?v.slice(0,31)+'…':v};
@@ -302,23 +348,28 @@ async function api(path,opt){
 function renderNav(filter){
   const f=(filter||'').toLowerCase();let html='';
   for(const grp of NAV){
-    const items=grp.items.filter(i=>!f||i.name.toLowerCase().includes(f));
+    const items=grp.items.filter(i=>!i.hidden&&!i.tab&&(!f||i.name.toLowerCase().includes(f)));
     if(!items.length)continue;
     if(grp.g)html+='<div class="nav-group-title">'+esc(grp.g)+'</div>';
-    for(const i of items)html+='<button class="nav-item'+(current===i.id?' active':'')+(i.todo?' todo':'')+'" data-id="'+i.id+'">'+ico(i.icon)+'<span class="nav-text">'+esc(i.name)+'</span>'+(i.todo?'<span class="soon">未实现</span>':'')+'</button>';
+    for(const i of items){
+      const active=current===i.id||hubOf(current)===i.id&&i.hub;
+      html+='<button class="nav-item'+(active?' active':'')+(i.todo?' todo':'')+'" data-id="'+i.id+'">'+ico(i.icon)+'<span class="nav-text">'+esc(i.name)+'</span>'+(i.todo?'<span class="soon">未实现</span>':'')+'</button>';
+    }
   }
   $('nav').innerHTML=html;
   $('nav').querySelectorAll('.nav-item').forEach(b=>b.onclick=()=>go(b.dataset.id));
 }
 function go(id){
-  const item=NAV.flatMap(g=>g.items).find(i=>i.id===id);
+  id=LEGACY[id]||id;
+  const item=ALLNAV.find(i=>i.id===id);
   if(item&&item.todo){toast(item.name+' 在 gately-rs 中尚未实现');return}
-  current=id;location.hash=id;
+  current=id;location.hash=id.slice(1);
   const grp=NAV.find(g=>g.items.some(i=>i.id===id));
   $('crumbG').textContent=grp&&grp.g?grp.g:'首页';$('crumbSep').style.display=grp&&grp.g?'':'none';$('crumbT').textContent=PAGES[id]||id;
   renderNav($('navSearch').value);renderPage();
   if(innerWidth<=768)$('aside').classList.remove('open');
 }
+window.goHubTab=id=>go(id);
 
 function table(cols,rows,emptyText){
   if(!rows.length)return '<div class="empty">'+(emptyText||'暂无数据')+'</div>';
@@ -383,14 +434,14 @@ function pageJail(){
   $('pageDesc').textContent='fail2ban 式日志监狱，可把封禁写入 nftables / iptables';
   $('pageActions').innerHTML='<button class="btn primary" onclick="openForm(\'jail\')">'+ico('settings')+'修改配置</button>';
   const j=C.config&&C.config.jail||{};
-  const rows=(C.bans||[]).map(b=>'<tr><td class="mono">'+esc(typeof b==='string'?b:JSON.stringify(b))+'</td></tr>');
+  const rows=(Array.isArray(C.bans)?C.bans:[]).map(b=>'<tr><td class="mono">'+esc(typeof b==='string'?b:JSON.stringify(b))+'</td></tr>');
   $('pageBody').innerHTML='<div class="card"><div class="card-head"><div class="card-title">'+ico('shield')+'当前配置</div></div><div class="card-body"><div class="grid">'+
    '<div><div class="kv-k">状态</div><div class="kv-v">'+(j.enabled?'<span class="tag green">启用</span>':'<span class="tag gray">停用</span>')+'</div></div>'+
    '<div><div class="kv-k">后端</div><div class="kv-v mono">'+esc(j.backend||'none')+'</div></div>'+
    '<div><div class="kv-k">日志文件</div><div class="kv-v mono">'+esc(short(j.log_path||'-'))+'</div></div>'+
    '<div><div class="kv-k">阈值</div><div class="kv-v">'+(j.max_failures??'-')+' 次 / '+(j.window_secs??'-')+' 秒</div></div>'+
    '</div><div class="help">失败正则：'+esc((j.patterns||[]).join(' | ')||'未设置')+'</div></div></div>'+
-   '<div class="card"><div class="card-head"><div class="card-title">'+ico('shield')+'已封禁 IP</div><span class="card-desc">共 '+((C.bans||[]).length)+' 条</span></div>'+(C.bans&&C.bans.length?table(['IP / 规则'],rows):'<div class="empty">当前没有封禁记录</div>')+'</div>';
+   '<div class="card"><div class="card-head"><div class="card-title">'+ico('shield')+'已封禁 IP</div><span class="card-desc">共 '+((Array.isArray(C.bans)?C.bans.length:0))+' 条</span></div>'+(C.bans&&C.bans.length?table(['IP / 规则'],rows):'<div class="empty">当前没有封禁记录</div>')+'</div>';
 }
 function pageTunnels(){
   $('pageDesc').textContent='托管 frpc、cloudflared 等外部二进制，异常退出自动重启';
@@ -530,23 +581,23 @@ async function diag(kind){
 function pageKnock(){
   $('pageDesc').textContent='单包敲门：AES-256-CFB 加密 + HMAC-SHA256 校验 + 时间窗防重放，成功后放行来源地址';
   $('pageActions').innerHTML='<button class="btn primary" onclick="openForm(\'knockrule\')">'+ico('plus')+'新建规则</button>';
-  const rows=(C.knockRules||[]).map(r=>'<tr><td class="mono">'+esc(r.id)+'</td><td>'+esc(r.name)+'</td><td class="mono">'+esc((r.ports||[]).join(','))+'</td><td>'+((r.identities||[]).length)+' 个身份</td><td>'+(r.enabled?'<span class="tag green">启用</span>':'<span class="tag gray">停用</span>')+'</td><td>'+delBtn('/knock/rules/'+encodeURIComponent(r.id))+'</td></tr>');
-  $('pageBody').innerHTML='<div class="card"><div class="card-head"><div class="card-title">'+ico('shield')+'敲门规则</div><span class="card-desc">共 '+(C.knockRules||[]).length+' 条</span></div>'+table(['ID','名称','放行端口','身份','状态','操作'],rows,'暂无敲门规则')+'</div>'
+  const rows=(Array.isArray(C.knockRules)?C.knockRules:[]).map(r=>'<tr><td class="mono">'+esc(r.id)+'</td><td>'+esc(r.name)+'</td><td class="mono">'+esc((r.ports||[]).join(','))+'</td><td>'+((r.identities||[]).length)+' 个身份</td><td>'+(r.enabled?'<span class="tag green">启用</span>':'<span class="tag gray">停用</span>')+'</td><td>'+delBtn('/knock/rules/'+encodeURIComponent(r.id))+'</td></tr>');
+  $('pageBody').innerHTML='<div class="card"><div class="card-head"><div class="card-title">'+ico('shield')+'敲门规则</div><span class="card-desc">共 '+(Array.isArray(C.knockRules)?C.knockRules.length:0)+' 条</span></div>'+table(['ID','名称','放行端口','身份','状态','操作'],rows,'暂无敲门规则')+'</div>'
     +'<p class="help">客户端使用同一密钥对「时间戳 + nonce + 身份」加密并附加 HMAC-SHA256 前 16 字节后 base64 提交到 <code>POST /api/knock/{rule_id}</code>。</p>';
 }
 function pageDocker(){
   $('pageDesc').textContent='容器、镜像与 Compose 管理，耗时操作在后台任务中执行并可中断';
   $('pageActions').innerHTML='<button class="btn" onclick="refreshData()">'+ico('history')+'刷新</button>';
-  const rows=(C.dockerContainers||[]).map(c=>'<tr><td class="mono">'+esc((c.ID||c.Id||'').slice(0,12))+'</td><td>'+esc(c.Names||c.Name||'')+'</td><td class="mono">'+esc(c.Image||'')+'</td><td>'+esc(c.State||c.Status||'')+'</td><td class="mono">'+esc(c.Ports||'')+'</td><td><div class="ops">'
+  const rows=(Array.isArray(C.dockerContainers)?C.dockerContainers:[]).map(c=>'<tr><td class="mono">'+esc((c.ID||c.Id||'').slice(0,12))+'</td><td>'+esc(c.Names||c.Name||'')+'</td><td class="mono">'+esc(c.Image||'')+'</td><td>'+esc(c.State||c.Status||'')+'</td><td class="mono">'+esc(c.Ports||'')+'</td><td><div class="ops">'
     +runBtn('/docker/containers/'+encodeURIComponent((c.ID||c.Id||'').slice(0,12))+'/restart','重启')
     +runBtn('/docker/containers/'+encodeURIComponent((c.ID||c.Id||'').slice(0,12))+'/stop','停止')
     +runBtn('/docker/containers/'+encodeURIComponent((c.ID||c.Id||'').slice(0,12))+'/start','启动')+'</div></td></tr>');
-  $('pageBody').innerHTML='<div class="card"><div class="card-head"><div class="card-title">'+ico('settings')+'容器</div><span class="card-desc">共 '+(C.dockerContainers||[]).length+' 个</span></div>'+table(['ID','名称','镜像','状态','端口','操作'],rows,'未启用 Docker 模块或本机没有 Docker')+'</div>';
+  $('pageBody').innerHTML='<div class="card"><div class="card-head"><div class="card-title">'+ico('settings')+'容器</div><span class="card-desc">共 '+(Array.isArray(C.dockerContainers)?C.dockerContainers.length:0)+' 个</span></div>'+table(['ID','名称','镜像','状态','端口','操作'],rows,'未启用 Docker 模块或本机没有 Docker')+'</div>';
 }
 function pageTerminal(){
   $('pageDesc').textContent='浏览器内 Shell、SSH 与 Telnet 会话，支持文件浏览与传输';
   $('pageActions').innerHTML='<button class="btn primary" onclick="openForm(\'terminal\')">'+ico('plus')+'新建会话</button>';
-  const rows=(C.terminalSessions||[]).map(s=>'<tr><td class="mono">'+esc(s.id)+'</td><td><span class="tag">'+esc(s.kind)+'</span></td><td class="mono">'+esc(s.target||'-')+'</td><td>'+(s.active?'<span class="tag green">在线</span>':'<span class="tag gray">已断开</span>')+'</td><td>'+delBtn('/terminal/sessions/'+encodeURIComponent(s.id))+'</td></tr>');
+  const rows=(Array.isArray(C.terminalSessions)?C.terminalSessions:[]).map(s=>'<tr><td class="mono">'+esc(s.id)+'</td><td><span class="tag">'+esc(s.kind)+'</span></td><td class="mono">'+esc(s.target||'-')+'</td><td>'+(s.active?'<span class="tag green">在线</span>':'<span class="tag gray">已断开</span>')+'</td><td>'+delBtn('/terminal/sessions/'+encodeURIComponent(s.id))+'</td></tr>');
   $('pageBody').innerHTML='<div class="card"><div class="card-head"><div class="card-title">'+ico('tunnel')+'会话</div></div>'+table(['ID','类型','目标','状态','操作'],rows,'暂无终端会话')+'</div>'
     +'<p class="help">终端通道为 WebSocket：<code>/api/terminal/ws/{id}</code>，文本帧即终端输入输出。</p>';
 }
@@ -571,8 +622,189 @@ function pageUpdate(){
     +(adv?'<div class="card"><div class="card-head"><div class="card-title">安全公告</div></div><div class="card-body"><ul>'+adv+'</ul></div></div>':'')
     +(u.release_url?'<p class="help">下载地址：<a href="'+esc(u.release_url)+'" target="_blank">'+esc(u.release_url)+'</a></p>':'');
 }
-const PAGES_FN={overview:pageOverview,sites:pageSites,certs:pageCerts,acme:pageAcme,ddns:pageDdns,waf:pageWaf,jail:pageJail,tunnels:pageTunnels,stun:pageStun,history:pageHistory,import:pageImport,auth:pageAuth,portforward:pagePortForward,protoroute:pageProtoRoute,iplists:pageIpLists,siteusers:pageSiteUsers,notifications:pageNotifications,tasks:pageTasks,audit:pageLogs,stats:pageStats,topology:pageTopology,system:pageSystem,diag:pageDiag,knock:pageKnock,docker:pageDocker,terminal:pageTerminal,files:pageFiles,update:pageUpdate};
-function renderPage(){$('pageTitle').textContent=PAGES[current]||current;(PAGES_FN[current]||pageOverview)()}
+
+// ===== 上游功能位置对齐：新增页面 =====
+function pageVisitors(){
+  $('pageDesc').textContent='按访客 IP 汇总其访问过的站点、路径与被拦截次数';
+  $('pageActions').innerHTML='<button class="btn" onclick="api(\'/visitor-audit/export\').then(t=>downloadText(t,\'visitors.csv\')).catch(e=>toast(e.message,\'err\'))">'+ico('import')+'导出 CSV</button>';
+  const v=C.visitorAudit||{};
+  const list=Array.isArray(v)?v:(v.visitors||v.entries||Object.entries(v).map(([ip,x])=>Object.assign({ip},x)));
+  const rows=(list||[]).map(x=>{
+    const sites=x.sites||{};const paths=x.paths||{};
+    const topSite=Object.entries(sites).sort((a,b)=>b[1]-a[1])[0];
+    const topPath=Object.entries(paths).sort((a,b)=>b[1]-a[1])[0];
+    return '<tr><td class="mono">'+esc(x.ip||'-')+'</td><td>'+esc(topSite?topSite[0]:'-')+'</td><td class="mono">'+esc(topPath?topPath[0]:'-')+'</td><td>'+(x.requests??topSite?topSite[1]:0)+'</td><td>'+(x.blocked??0)+'</td><td class="mono">'+esc(x.last_seen||'-')+'</td></tr>';
+  });
+  $('pageBody').innerHTML='<div class="card"><div class="card-head"><div class="card-title">'+ico('footprints')+'访客审计</div><span class="card-desc">共 '+rows.length+' 位访客</span></div>'+table(['IP','主要站点','热门路径','请求数','拦截','最近访问'],rows,'暂无访客记录')+'</div>';
+}
+function downloadText(text,name){
+  const b=new Blob([text],{type:'text/plain;charset=utf-8'});const u=URL.createObjectURL(b);
+  const a=document.createElement('a');a.href=u;a.download=name;a.click();URL.revokeObjectURL(u);
+}
+function pagePanels(){
+  $('pageDesc').textContent='将多个站点组织成导航面板，统一展示入口';
+  $('pageActions').innerHTML='<button class="btn primary" onclick="openForm(\'site\')">'+ico('plus')+'新建站点</button>';
+  const panels=C.sites.filter(s=>s.kind==='nav');
+  const rows=panels.map(s=>'<tr><td class="mono">'+esc(s.id)+'</td><td>'+esc((s.domains||[]).join(', '))+'</td><td>'+esc(short(s.nav_html||''))+'</td><td>'+delBtn('/sites/'+encodeURIComponent(s.id))+'</td></tr>');
+  $('pageBody').innerHTML='<div class="card"><div class="card-head"><div class="card-title">'+ico('grid')+'导航面板</div><span class="card-desc">共 '+panels.length+' 个</span></div>'+table(['ID','域名','面板内容','操作'],rows,'暂无导航面板。新建站点时选择 kind=nav 即可创建')+'</div>'
+    +'<p class="help">导航面板是 kind=nav 的站点，通过 nav_html 定义入口卡片。共 '+C.sites.length+' 个站点可作为面板内容。</p>';
+}
+function pageSsl(){
+  $('pageDesc').textContent='静态 PEM 证书与 ACME 自动签发，统一在同一页面管理';
+  $('pageActions').innerHTML='<button class="btn" onclick="openForm(\'cert\')">'+ico('plus')+'静态证书</button><button class="btn primary" onclick="openForm(\'acme\')">'+ico('plus')+'ACME 任务</button>';
+  const certs=C.certs.map(c=>'<tr><td class="mono">'+esc(c.id)+'</td><td class="mono">'+esc(short(c.cert_path))+'</td><td class="mono">'+esc(short(c.key_path))+'</td><td>'+delBtn('/certs/'+encodeURIComponent(c.id))+'</td></tr>');
+  const acme=C.acme.map(a=>'<tr><td class="mono">'+esc(a.id)+'</td><td>'+esc((a.domains||[]).join(', '))+'</td><td class="mono">'+esc(a.cert_id||'-')+'</td><td>'+(a.last_error?'<span class="tag red">错误</span>':'<span class="tag green">正常</span>')+'</td><td><div class="ops">'+runBtn('/acme/'+encodeURIComponent(a.id)+'/run','签发')+delBtn('/acme/'+encodeURIComponent(a.id))+'</div></td></tr>');
+  $('pageBody').innerHTML='<div class="card"><div class="card-head"><div class="card-title">'+ico('shieldcheck')+'静态证书</div><span class="card-desc">'+C.certs.length+' 条</span></div>'+table(['ID','证书路径','私钥路径','操作'],certs,'暂无静态证书')+'</div>'
+    +'<div class="card"><div class="card-head"><div class="card-title">'+ico('key')+'ACME 自动签发</div><span class="card-desc">'+C.acme.length+' 条</span></div>'+table(['ID','域名','证书 ID','状态','操作'],acme,'暂无 ACME 任务')+'</div>';
+}
+function pageMeshProvider(kind){
+  const names={tailscale:'Tailscale / Headscale',netbird:'NetBird',easytier:'EasyTier'};
+  $('pageDesc').textContent='加入 '+names[kind]+' 组网，与 frp / Cloudflare 隧道共用隧道托管配置';
+  const items=C.tunnels.filter(t=>(t.kind||'').toLowerCase().includes(kind)||(t.provider||'').toLowerCase().includes(kind));
+  const rows=items.map(t=>'<tr><td class="mono">'+esc(t.id)+'</td><td>'+esc(t.name||'-')+'</td><td><span class="tag">'+esc(t.kind||t.provider||'-')+'</span></td><td><span class="tag '+(t.enabled?'green':'gray')+'">'+(t.enabled?'启用':'停用')+'</span></td><td>'+delBtn('/tunnels/'+encodeURIComponent(t.id))+'</td></tr>');
+  $('pageBody').innerHTML='<div class="card"><div class="card-head"><div class="card-title">'+ico('network')+names[kind]+' 节点</div><span class="card-desc">'+items.length+' 条</span></div>'+table(['ID','名称','类型','状态','操作'],rows,'暂无 '+names[kind]+' 节点，可在隧道托管中新增 kind='+kind+' 的任务')+'</div>'
+    +'<p class="help">'+names[kind]+' 任务复用 <code>tunnels</code> 配置，通过 kind 字段区分。当前隧道任务共 '+C.tunnels.length+' 条。</p>';
+}
+function pageMesh(){ pageMeshProvider('tailscale'); $('pageDesc').textContent='组网：Tailscale / NetBird / EasyTier，通过上方标签切换'; }
+function pageFrp(){
+  $('pageDesc').textContent='frpc / frps 内网穿透，复用隧道托管配置';
+  const items=C.tunnels.filter(t=>/frp/i.test((t.kind||'')+' '+(t.provider||'')));
+  const rows=items.map(t=>'<tr><td class="mono">'+esc(t.id)+'</td><td>'+esc(t.name||'-')+'</td><td>'+esc(t.role||t.kind||'-')+'</td><td><span class="tag '+(t.enabled?'green':'gray')+'">'+(t.enabled?'启用':'停用')+'</span></td><td>'+delBtn('/tunnels/'+encodeURIComponent(t.id))+'</td></tr>');
+  $('pageBody').innerHTML='<div class="card"><div class="card-head"><div class="card-title">'+ico('waypoints')+'frp 隧道</div><span class="card-desc">'+items.length+' 条</span></div>'+table(['ID','名称','角色','状态','操作'],rows,'暂无 frp 隧道任务')+'</div>';
+}
+function pageCloudflared(){
+  $('pageDesc').textContent='Cloudflare Tunnel：无需公网 IP 发布内网服务';
+  const items=C.tunnels.filter(t=>/cloudflare/i.test((t.kind||'')+' '+(t.provider||'')));
+  const rows=items.map(t=>'<tr><td class="mono">'+esc(t.id)+'</td><td>'+esc(t.name||'-')+'</td><td class="mono">'+esc(short(t.token||t.hostname||''))+'</td><td><span class="tag '+(t.enabled?'green':'gray')+'">'+(t.enabled?'启用':'停用')+'</span></td><td>'+delBtn('/tunnels/'+encodeURIComponent(t.id))+'</td></tr>');
+  $('pageBody').innerHTML='<div class="card"><div class="card-head"><div class="card-title">'+ico('cloud')+'Cloudflare 隧道</div><span class="card-desc">'+items.length+' 条</span></div>'+table(['ID','名称','令牌/域名','状态','操作'],rows,'暂无 Cloudflare 隧道任务')+'</div>';
+}
+function pageWebdav(){
+  const cfg=(C.config&&C.config.files&&C.config.files.webdav)||{};
+  $('pageDesc').textContent='WebDAV 文件共享服务，支持多用户、只读与根目录授权';
+  $('pageActions').innerHTML='<button class="btn primary" onclick="openForm(\'files\')">'+ico('settings')+'配置服务</button>';
+  const roots=cfg.roots||[];
+  const rows=roots.map(r=>'<tr><td class="mono">'+esc(r.id)+'</td><td>'+esc(r.name)+'</td><td class="mono">'+esc(short(r.path))+'</td><td>'+(r.readonly?'<span class="tag amber">只读</span>':'<span class="tag green">可写</span>')+'</td><td>'+((r.users||[]).length)+' 用户</td></tr>');
+  $('pageBody').innerHTML='<div class="stats"><div class="stat"><div class="k">状态</div><div class="v">'+(cfg.enabled?'<span class="tag green">启用</span>':'<span class="tag gray">停用</span>')+'</div></div><div class="stat"><div class="k">监听</div><div class="v" style="font-size:15px">'+esc(cfg.listen||'-')+'</div></div><div class="stat"><div class="k">认证</div><div class="v">'+(cfg.require_login?'需要登录':'匿名')+'</div></div></div>'
+    +'<div class="card"><div class="card-head"><div class="card-title">'+ico('foldersync')+'共享根目录</div></div>'+table(['ID','名称','路径','权限','授权用户'],rows,'暂无共享目录')+'</div>';
+}
+function pageFtp(){
+  const cfg=(C.config&&C.config.files&&C.config.files.ftp)||{};
+  $('pageDesc').textContent='FTP 文件共享服务，支持被动模式、多用户与只读';
+  $('pageActions').innerHTML='<button class="btn primary" onclick="openForm(\'files\')">'+ico('settings')+'配置服务</button>';
+  const roots=cfg.roots||[];
+  const rows=roots.map(r=>'<tr><td class="mono">'+esc(r.id)+'</td><td>'+esc(r.name)+'</td><td class="mono">'+esc(short(r.path))+'</td><td>'+(r.readonly?'<span class="tag amber">只读</span>':'<span class="tag green">可写</span>')+'</td></tr>');
+  $('pageBody').innerHTML='<div class="stats"><div class="stat"><div class="k">状态</div><div class="v">'+(cfg.enabled?'<span class="tag green">启用</span>':'<span class="tag gray">停用</span>')+'</div></div><div class="stat"><div class="k">监听</div><div class="v" style="font-size:15px">'+esc(cfg.listen||'-')+'</div></div><div class="stat"><div class="k">被动端口</div><div class="v" style="font-size:15px">'+esc((cfg.passive_port_start||'-')+'–'+(cfg.passive_port_end||'-'))+'</div></div></div>'
+    +'<div class="card"><div class="card-head"><div class="card-title">'+ico('server')+'共享根目录</div></div>'+table(['ID','名称','路径','权限'],rows,'暂无共享目录')+'</div>';
+}
+function pageSmb(){
+  const st=C.smbStatus||{};
+  $('pageDesc').textContent='SMB 文件共享服务，与 WebDAV / FTP 共用用户体系';
+  $('pageActions').innerHTML='<button class="btn primary" onclick="openForm(\'smb\')">'+ico('plus')+'新建共享</button>';
+  const rows=(st.shares||[]).map(s=>'<tr><td>'+esc(s.name)+'</td><td class="mono">'+esc(short(s.path))+'</td><td>'+(s.readonly?'<span class="tag amber">只读</span>':'<span class="tag green">可写</span>')+'</td><td>'+(s.exists?'<span class="tag green">存在</span>':'<span class="tag red">路径不存在</span>')+'</td></tr>');
+  $('pageBody').innerHTML='<div class="stats"><div class="stat"><div class="k">状态</div><div class="v">'+(st.enabled?'<span class="tag green">启用</span>':'<span class="tag gray">停用</span>')+'</div></div><div class="stat"><div class="k">工作组</div><div class="v">'+esc(st.workgroup||'-')+'</div></div><div class="stat"><div class="k">共享数</div><div class="v">'+((st.shares||[]).length)+'</div></div></div>'
+    +'<div class="card"><div class="card-head"><div class="card-title">'+ico('foldertree')+'SMB 共享</div></div>'+table(['名称','路径','权限','目录检查'],rows,'暂无 SMB 共享')+'</div>';
+}
+function pageFileUsers(){
+  const f=(C.config&&C.config.files)||{};
+  const users=[...(f.webdav&&f.webdav.users||[]),...(f.ftp&&f.ftp.users||[])];
+  const seen=new Set();const uniq=users.filter(u=>{if(seen.has(u.username))return false;seen.add(u.username);return true;});
+  $('pageDesc').textContent='WebDAV / FTP / SMB 共用的文件共享用户';
+  $('pageActions').innerHTML='';
+  const rows=uniq.map(u=>'<tr><td class="mono">'+esc(u.username)+'</td><td>'+(u.readonly?'<span class="tag amber">只读</span>':'<span class="tag green">可写</span>')+'</td><td>'+((u.roots||[]).length)+' 个根目录</td></tr>');
+  $('pageBody').innerHTML='<div class="card"><div class="card-head"><div class="card-title">'+ico('users')+'共享用户</div><span class="card-desc">'+uniq.length+' 人</span></div>'+table(['用户名','权限','授权根目录'],rows,'暂无文件共享用户')+'</div>';
+}
+function pageStorage(){
+  const mounts=C.storageMounts||[];
+  $('pageDesc').textContent='挂载本地目录、WebDAV 或 SMB 共享，供在线文件管理使用';
+  $('pageActions').innerHTML='<button class="btn primary" onclick="openForm(\'storage\')">'+ico('plus')+'新建挂载</button>';
+  const rows=mounts.map(m=>'<tr><td class="mono">'+esc(m.id)+'</td><td>'+esc(m.name)+'</td><td><span class="tag">'+esc(m.kind||'local')+'</span></td><td class="mono">'+esc(short(m.url||m.path))+'</td><td>'+(m.enabled?'<span class="tag green">启用</span>':'<span class="tag gray">停用</span>')+'</td><td><button class="btn sm" onclick="api(\'/storage/check/'+encodeURIComponent(m.id)+'\').then(r=>toast(r.detail,\'ok\')).catch(e=>toast(e.message,\'err\'))">检查</button>'+delBtn('/modules/storage')+'</td></tr>');
+  $('pageBody').innerHTML='<div class="card"><div class="card-head"><div class="card-title">'+ico('harddrive')+'存储挂载</div><span class="card-desc">'+mounts.length+' 条</span></div>'+table(['ID','名称','类型','地址','状态','操作'],rows,'暂无存储挂载')+'</div>';
+}
+function pageFileBrowser(){
+  const st=C.fbStatus||{};
+  $('pageDesc').textContent='网页文件管理器，支持在线预览、上传与分享';
+  $('pageActions').innerHTML='<button class="btn primary" onclick="openForm(\'filebrowser\')">'+ico('settings')+'配置</button>';
+  $('pageBody').innerHTML='<div class="stats"><div class="stat"><div class="k">状态</div><div class="v">'+(st.enabled?'<span class="tag green">启用</span>':'<span class="tag gray">停用</span>')+'</div></div><div class="stat"><div class="k">监听</div><div class="v" style="font-size:15px">'+esc(st.listen||'-')+'</div></div><div class="stat"><div class="k">根目录</div><div class="v" style="font-size:14px">'+esc(short(st.root||'-'))+'</div></div><div class="stat"><div class="k">权限</div><div class="v">'+(st.readonly?'只读':'可写')+'</div></div></div>'
+    +(st.root_ok&&st.url?'<p class="help">访问地址：<a href="'+esc(st.url)+'" target="_blank">'+esc(st.url)+'</a></p>':'<p class="help">启用并设置有效根目录后即可通过浏览器访问。</p>');
+}
+function pageWol(){
+  const hosts=C.wolHosts||[];
+  $('pageDesc').textContent='远程唤醒局域网设备，通过 UDP 魔法包唤醒';
+  $('pageActions').innerHTML='<button class="btn primary" onclick="openForm(\'wolhost\')">'+ico('plus')+'新建主机</button>';
+  const rows=hosts.map(h=>'<tr><td class="mono">'+esc(h.id)+'</td><td>'+esc(h.name)+'</td><td class="mono">'+esc(h.mac)+'</td><td class="mono">'+esc(h.broadcast||'255.255.255.255')+'</td><td><button class="btn sm primary" onclick="wake(\''+encodeURIComponent(h.id)+'\')">'+ico('power')+'唤醒</button>'+delBtn('/modules/wol')+'</td></tr>');
+  $('pageBody').innerHTML='<div class="card"><div class="card-head"><div class="card-title">'+ico('power')+'可唤醒主机</div><span class="card-desc">'+hosts.length+' 台</span></div>'+table(['ID','名称','MAC','广播地址','操作'],rows,'暂无主机')+'</div>'
+    +'<p class="help">唤醒通过 UDP 广播发送 6×FF + MAC×16 的魔法包，默认端口 9。主机需开启网卡 WoL 支持。</p>';
+}
+window.wake=id=>api('/wol/wake/'+id,{method:'POST'}).then(r=>toast('已发送唤醒包：'+(r.mac||id),'ok')).catch(e=>toast(e.message,'err'));
+function pagePerf(){
+  const p=C.perfSnapshot||{};const cfg=(C.config&&C.config.perf)||{};
+  $('pageDesc').textContent='系统资源使用趋势与阈值告警（数据来自 /api/metrics）';
+  $('pageActions').innerHTML='<button class="btn" onclick="refreshData()">'+ico('refresh')+'刷新</button>';
+  const card=(label,val,warn,alert)=>'<div class="stat"><div class="k">'+label+'</div><div class="v">'+(val==null?'-':val+'%')+'</div><div class="s">'+(alert?'<span class="tag red">超过阈值 '+warn+'%</span>':'阈值 '+warn+'%')+'</div></div>';
+  $('pageBody').innerHTML='<div class="stats">'+card('CPU',p.cpu_usage_percent,p.cpu_warn,p.cpu_alert)+card('内存',p.memory_usage_percent,p.mem_warn,p.mem_alert)+card('磁盘',p.disk_usage_percent!=null?p.disk_usage_percent:p.disk_percent,p.disk_warn,false)+'</div>'
+    +'<div class="card"><div class="card-head"><div class="card-title">'+ico('gauge')+'监控配置</div></div><div class="card-body"><pre>'+esc(JSON.stringify(p,null,2))+'</pre></div></div>';
+}
+function pageLogsSystem(){
+  $('pageDesc').textContent='系统运行日志与最近事件';
+  $('pageActions').innerHTML='';
+  const items=Array.isArray(C.audit)?C.audit:[];
+  const rows=items.slice(0,200).map(a=>'<tr><td class="mono">'+esc(a.time||a.timestamp||'-')+'</td><td>'+esc(a.actor||a.user||'-')+'</td><td>'+esc(a.action||'-')+'</td><td class="mono">'+esc(short(a.target||a.detail||''))+'</td></tr>');
+  $('pageBody').innerHTML='<div class="card"><div class="card-head"><div class="card-title">'+ico('scroll')+'系统日志</div><span class="card-desc">最近 '+Math.min(rows.length,200)+' 条</span></div>'+table(['时间','操作者','动作','目标'],rows,'暂无日志记录')+'</div>';
+}
+function pageLogsAudit(){ pageLogs(); }
+function pageLogsHistory(){ pageHistory(); }
+function pageSettings(){
+  $('pageDesc').textContent='系统设置、认证安全与配置导入迁移';
+  $('pageActions').innerHTML='<button class="btn" onclick="reloadCfg()">'+ico('history')+'从磁盘重载</button><button class="btn primary" onclick="openForm(\'system\')">'+ico('settings')+'编辑系统设置</button>';
+  const cfg=C.config||{};const sys=cfg.system||{};const auth=cfg.auth||{};
+  $('pageBody').innerHTML='<div class="grid"><div class="card"><div class="card-head"><div class="card-title">'+ico('settings')+'系统</div></div><div class="card-body"><pre>'+esc(JSON.stringify(sys,null,2))+'</pre></div></div>'
+    +'<div class="card"><div class="card-head"><div class="card-title">'+ico('key')+'认证安全</div></div><div class="card-body"><pre>'+esc(JSON.stringify({password_login:auth.password_login,require_totp:auth.require_totp,oidc:(auth.oidc||[]).length,login_rate_limit:auth.login_rate_limit},null,2))+'</pre></div></div></div>'
+    +'<div class="card"><div class="card-head"><div class="card-title">'+ico('import')+'导入迁移</div></div><div class="card-body"><p class="help">支持从 nginx / Nginx Proxy Manager 配置导入站点规则。</p><button class="btn" onclick="go(\'/settings\');setTimeout(()=>{const f=FORMS.import;if(f)openForm(\'import\')},50)">'+ico('import')+'导入配置</button></div></div>';
+}
+function pageApiTokens(){
+  const toks=(C.config&&C.config.admin&&C.config.admin.api_tokens)||[];
+  $('pageDesc').textContent='管理 API 令牌与访问作用域（隐藏页面，可从全局搜索进入）';
+  $('pageActions').innerHTML='<button class="btn primary" onclick="openForm(\'apitoken\')">'+ico('plus')+'新建令牌</button>';
+  const rows=toks.map(t=>'<tr><td class="mono">'+esc(t.id)+'</td><td>'+esc(t.name)+'</td><td class="mono">'+esc(short(t.token))+'</td><td>'+((t.scopes||[]).join(', ')||'全部')+'</td><td>'+(t.readonly?'<span class="tag amber">只读</span>':'<span class="tag green">可写</span>')+'</td><td>'+(t.enabled?'<span class="tag green">启用</span>':'<span class="tag gray">停用</span>')+'</td><td>'+delBtn('/api-tokens/'+encodeURIComponent(t.id))+'</td></tr>');
+  $('pageBody').innerHTML='<div class="card"><div class="card-head"><div class="card-title">'+ico('key')+'API 令牌</div><span class="card-desc">'+toks.length+' 条</span></div>'+table(['ID','名称','令牌','作用域','权限','状态','操作'],rows,'暂无 API 令牌')+'</div>';
+}
+function pageApiDocs(){
+  $('pageDesc').textContent='OpenAPI 接口文档，由 /api/openapi.json 实时生成';
+  $('pageActions').innerHTML='<button class="btn primary" onclick="window.open(API_BASE+\'/api/openapi.json\',\'_blank\')">'+ico('book')+'打开 JSON</button>';
+  $('pageBody').innerHTML='<div class="card"><div class="card-head"><div class="card-title">'+ico('book')+'API 文档</div></div><div class="card-body"><p class="help">所有管理接口位于 <code>/api/</code> 下，使用 <code>Authorization: Bearer &lt;token&gt;</code> 认证。</p><pre>'+esc(API_BASE+'/api/openapi.json')+'</pre></div></div>';
+}
+function pageAbout(){
+  const s=C.status||{};const u=C.updateInfo||{};
+  $('pageDesc').textContent='gately-rs 版本、来源与许可信息';
+  $('pageActions').innerHTML='<button class="btn" onclick="go(\'/update\')">'+ico('history')+'检查更新</button>';
+  $('pageBody').innerHTML='<div class="grid"><div class="card"><div class="card-head"><div class="card-title">'+ico('info')+'关于</div></div><div class="card-body"><p>gately-rs <span class="tag green">v'+esc(s.version||'0.5.0')+'</span></p><p class="help">用 Rust 编写的边缘网关，借鉴 Gately 的功能设计，是独立的重新实现。上游 Gately 采用 Apache-2.0 许可。</p><p class="help">最新版本：'+esc(u.latest||'未检查')+'</p></div></div>'
+    +'<div class="card"><div class="card-head"><div class="card-title">'+ico('shieldcheck')+'模块状态</div></div><div class="card-body"><pre>'+esc(JSON.stringify({version:s.version,listeners:s.listeners,sites:s.sites,waf_rules:s.waf_rules},null,2))+'</pre></div></div></div>';
+}
+
+const PAGES_FN={
+ '/overview':pageOverview,'/portforward':pagePortForward,'/protoroute':pageProtoRoute,'/ddns':pageDdns,
+ '/guard':pageJail,'/knock':pageKnock,'/waf':pageWaf,'/iplists':pageIpLists,
+ '/web':pageSites,'/web/topology':pageTopology,'/web/visitors':pageVisitors,'/web/panels':pagePanels,
+ '/ssl':pageSsl,'/webusers':pageSiteUsers,
+ '/mesh':pageMesh,'/mesh/tailscale':()=>pageMeshProvider('tailscale'),'/mesh/netbird':()=>pageMeshProvider('netbird'),'/mesh/easytier':()=>pageMeshProvider('easytier'),
+ '/frp':pageFrp,'/cloudflared':pageCloudflared,'/stun':pageStun,
+ '/files':pageWebdav,'/files/webdav':pageWebdav,'/files/ftp':pageFtp,'/files/smb':pageSmb,'/files/users':pageFileUsers,
+ '/storage':pageStorage,'/filebrowser':pageFileBrowser,
+ '/wol':pageWol,'/terminal':pageTerminal,'/nettools':pageDiag,'/docker':pageDocker,'/cron':pageTasks,
+ '/notify':pageNotifications,'/perf':pagePerf,'/logs':pageLogsSystem,'/logs/system':pageLogsSystem,'/logs/audit':pageLogsAudit,'/logs/history':pageLogsHistory,
+ '/settings':pageSettings,'/api-tokens':pageApiTokens,'/api-docs':pageApiDocs,'/about':pageAbout,'/update':pageUpdate
+};
+function renderTabs(hub){
+  if(!hub)return '';
+  const tabs=HUBS[hub]||[];
+  return '<div class="hubtabs">'+tabs.map(t=>'<button class="hubtab'+(current===t.id?' active':'')+'" onclick="goHubTab(\''+t.id+'\')">'+esc(t.name)+'</button>').join('')+'</div>';
+}
+function renderPage(){
+  $('pageTitle').textContent=PAGES[current]||current;
+  (PAGES_FN[current]||pageOverview)();
+  const hub=hubOf(current);
+  if(hub){const bar=renderTabs(hub);$('pageBody').insertAdjacentHTML('afterbegin',bar);}
+}
 
 const FORMS={
  knockrule:{title:'新建敲门规则',fields:[{k:'id',l:'规则 ID',req:1},{k:'name',l:'名称',req:1},{k:'aes_key',l:'AES 密钥（base64 32 字节）',req:1},{k:'hmac_key',l:'HMAC 密钥（base64 32 字节）',req:1},{k:'ports',l:'放行端口（逗号分隔）',ph:'22,80,443',req:1},{k:'identities',l:'允许身份（逗号分隔）'}],submit:v=>api('/knock/rules',{method:'POST',body:{id:v.id,name:v.name,aes_key:v.aes_key,hmac_key:v.hmac_key,ports:split(v.ports).map(Number),identities:split(v.identities),enabled:true,single_address:false}})},
@@ -596,7 +828,12 @@ const FORMS={
  task:{title:'新建计划任务',fields:[{k:'name',l:'名称',req:1},{k:'cron',l:'cron（分 时 日 月 周）',ph:'*/5 * * * *',req:1},{k:'kind',l:'类型',t:'select',opts:['command','http']},{k:'command',l:'命令'},{k:'url',l:'HTTP URL'},{k:'method',l:'HTTP 方法',t:'select',opts:['GET','POST']}],submit:v=>api('/tasks',{method:'POST',body:{id:'task_'+Date.now(),name:v.name,cron:v.cron,kind:v.kind,command:v.command,url:v.url,method:v.method,enabled:true,timeout_secs:60}})},
  import:{title:'导入配置',fields:[{k:'paths',l:'文件路径（逗号分隔）',ph:'/path/backup.json, /path/lucky.lkcf',req:1},{k:'keep_enabled',l:'保留原启用状态',t:'checkbox'}],submit:v=>api('/import',{method:'POST',body:{paths:split(v.paths),keep_enabled:!!v.keep_enabled}}).then(r=>{const o=$('importOut');if(o)o.textContent=JSON.stringify(r,null,2);return r})},
  jail:{title:'修改入侵防护',fields:[{k:'enabled',l:'启用',t:'checkbox'},{k:'log_path',l:'日志文件路径',ph:'/var/log/auth.log'},{k:'patterns',l:'失败正则（逗号分隔）',ph:'Failed password, Invalid user'},{k:'max_failures',l:'失败阈值',t:'number'},{k:'window_secs',l:'统计窗口（秒）',t:'number'},{k:'ban_secs',l:'封禁时长（秒）',t:'number'},{k:'backend',l:'封禁后端',t:'select',opts:['none','nftables','iptables','ipset']}],fill:cfg=>cfg&&cfg.jail?{...cfg.jail,patterns:(cfg.jail.patterns||[]).join(',')}:{},submit:v=>api('/jail',{method:'POST',body:{enabled:!!v.enabled,log_path:v.log_path,patterns:split(v.patterns),max_failures:+v.max_failures||5,window_secs:+v.window_secs||600,ban_secs:+v.ban_secs||3600,whitelist:[],backend:v.backend,nft_table:'gately',nft_chain:'gately_jail',log_sources:[],trap_ports:[],permanent_bans:[]}})},
- auth:{title:'修改认证设置',fields:[{k:'totp_secret',l:'TOTP Base32 密钥',ph:'JBSWY3DPEHPK3PXP'},{k:'require_totp',l:'登录必须输入 TOTP',t:'checkbox'},{k:'oidc_json',l:'OIDC 提供商 JSON',t:'textarea',ph:'[]'}],fill:cfg=>cfg&&cfg.auth?{totp_secret:cfg.auth.totp_secret||'',require_totp:!!cfg.auth.require_totp,oidc_json:JSON.stringify(cfg.auth.oidc||[],null,2)}:{oidc_json:'[]'},submit:v=>{let oidc=[];try{oidc=JSON.parse(v.oidc_json||'[]')}catch{throw new Error('OIDC JSON 无效')}return api('/auth',{method:'POST',body:{totp_secret:v.totp_secret||null,require_totp:!!v.require_totp,oidc,oidc_allowed_users:[],users:[],password_login:true}})}}
+ auth:{title:'修改认证设置',fields:[{k:'totp_secret',l:'TOTP Base32 密钥',ph:'JBSWY3DPEHPK3PXP'},{k:'require_totp',l:'登录必须输入 TOTP',t:'checkbox'},{k:'oidc_json',l:'OIDC 提供商 JSON',t:'textarea',ph:'[]'}],fill:cfg=>cfg&&cfg.auth?{totp_secret:cfg.auth.totp_secret||'',require_totp:!!cfg.auth.require_totp,oidc_json:JSON.stringify(cfg.auth.oidc||[],null,2)}:{oidc_json:'[]'},submit:v=>{let oidc=[];try{oidc=JSON.parse(v.oidc_json||'[]')}catch{throw new Error('OIDC JSON 无效')}return api('/auth',{method:'POST',body:{totp_secret:v.totp_secret||null,require_totp:!!v.require_totp,oidc,oidc_allowed_users:[],users:[],password_login:true}})}},
+ wolhost:{title:'新建可唤醒主机',fields:[{k:'id',l:'主机 ID',req:1},{k:'name',l:'名称',req:1},{k:'mac',l:'MAC 地址',ph:'AA:BB:CC:DD:EE:FF',req:1},{k:'broadcast',l:'广播地址',ph:'255.255.255.255'},{k:'remark',l:'备注'}],submit:async v=>{const cur=await api('/modules/wol');const hosts=cur.hosts||[];hosts.push({id:v.id,name:v.name,mac:v.mac,broadcast:v.broadcast,remark:v.remark});return api('/modules/wol',{method:'PUT',body:{enabled:!!cur.enabled,hosts}})}},
+ storage:{title:'新建存储挂载',fields:[{k:'id',l:'挂载 ID',req:1},{k:'name',l:'名称',req:1},{k:'kind',l:'类型',t:'select',opts:['local','webdav','smb']},{k:'path',l:'本地路径',ph:'/srv/data'},{k:'url',l:'远程 URL',ph:'https://dav.example.com/'},{k:'username',l:'用户名'},{k:'password',l:'密码',t:'password'},{k:'readonly',l:'只读',t:'checkbox'}],submit:async v=>{const cur=await api('/modules/storage');const list=Array.isArray(cur)?cur:[];list.push({id:v.id,name:v.name,kind:v.kind,path:v.path,url:v.url,username:v.username,password:v.password,readonly:!!v.readonly,enabled:true});return api('/modules/storage',{method:'PUT',body:list})}},
+ filebrowser:{title:'配置 File Browser',fields:[{k:'enabled',l:'启用',t:'checkbox'},{k:'listen',l:'监听地址',ph:'127.0.0.1:18088'},{k:'root',l:'根目录',ph:'/srv/files',req:1},{k:'base_url',l:'基础路径',ph:'/'},{k:'readonly',l:'只读',t:'checkbox'}],fill:cfg=>cfg&&cfg.filebrowser?cfg.filebrowser:{listen:'127.0.0.1:18088',base_url:'/'},submit:v=>api('/modules/filebrowser',{method:'PUT',body:{enabled:!!v.enabled,listen:v.listen,root:v.root,base_url:v.base_url,readonly:!!v.readonly,users:(C.config&&C.config.filebrowser&&C.config.filebrowser.users)||[]}})},
+ smb:{title:'新建 SMB 共享',fields:[{k:'name',l:'共享名',req:1},{k:'path',l:'目录路径',ph:'/srv/share',req:1},{k:'readonly',l:'只读',t:'checkbox'},{k:'users',l:'授权用户（逗号分隔）'}],submit:async v=>{const cur=await api('/modules/smb');const shares=cur.shares||[];shares.push({name:v.name,path:v.path,readonly:!!v.readonly,users:split(v.users)});return api('/modules/smb',{method:'PUT',body:{enabled:!!cur.enabled,workgroup:cur.workgroup||'WORKGROUP',shares}})}},
+ apitoken:{title:'新建 API 令牌',fields:[{k:'id',l:'令牌 ID',req:1},{k:'name',l:'名称',req:1},{k:'token',l:'令牌值',req:1},{k:'scopes',l:'作用域（逗号分隔，留空为全部）'},{k:'readonly',l:'只读',t:'checkbox'}],submit:async v=>{const cur=await api('/config');const toks=(cur.admin&&cur.admin.api_tokens)||[];toks.push({id:v.id,name:v.name,token:v.token,scopes:split(v.scopes),readonly:!!v.readonly,enabled:true});return api('/modules/admin',{method:'PUT',body:{api_tokens:toks}})}},
 };
 
 function fieldHTML(f,v){
@@ -638,12 +875,16 @@ async function refreshData(){
   if(!token)return;
   try{
     const s=await api('/status');C.status=s;
-    const [sites,certs,ddns,acme,waf,profiles,tunnels,stun,history,bans,forwards,routes,forwardStatus,routeStatus,channels,rules,tasks,taskStatus,iplists,siteusers,audit,system,stats,topology]=await Promise.all([
+    const [sites,certs,ddns,acme,waf,profiles,tunnels,stun,history,bans,forwards,routes,forwardStatus,routeStatus,channels,rules,tasks,taskStatus,iplists,siteusers,audit,system,stats,topology,knockRules,dockerContainers,terminalSessions,updateInfo,visitorAudit,wolHosts,storageMounts,fbStatus,smbStatus,perfSnapshot]=await Promise.all([
       api('/sites'),api('/certs'),api('/ddns'),api('/acme'),api('/waf/rules'),api('/waf/profiles'),
       api('/tunnels'),api('/stun'),api('/history'),api('/jail/bans'),api('/port-forwards'),api('/proto-routes'),
       api('/port-forwards/status'),api('/proto-routes/status'),api('/notifications/channels'),api('/notifications/rules'),
-      api('/tasks'),api('/tasks/status'),api('/ip-lists'),api('/site-users'),api('/audit'),api('/system'),api('/metrics'),api('/topology'),api('/knock/rules').catch(()=>[]),api('/docker/containers').catch(()=>[]),api('/terminal/sessions').catch(()=>[]),api('/update/info').catch(()=>null),api('/visitor-audit').catch(()=>null)]);
-    Object.assign(C,{sites,certs,ddns,acme,waf,profiles,tunnels,stun,history,bans,forwards,routes,forwardStatus,routeStatus,channels,rules,tasks,taskStatus,iplists,siteusers,audit,system,stats,topology,knockRules,dockerContainers,terminalSessions,updateInfo,visitorAudit});
+      api('/tasks'),api('/tasks/status'),api('/ip-lists'),api('/site-users'),api('/audit'),api('/system'),api('/metrics'),api('/topology'),
+      api('/knock/rules').catch(()=>[]),api('/docker/containers').catch(()=>[]),api('/terminal/sessions').catch(()=>[]),
+      api('/update/info').catch(()=>null),api('/visitor-audit').catch(()=>null),
+      api('/wol/hosts').catch(()=>[]),api('/storage').catch(()=>[]),api('/filebrowser/status').catch(()=>null),
+      api('/smb/status').catch(()=>null),api('/perf/snapshot').catch(()=>null)]);
+    Object.assign(C,{sites,certs,ddns,acme,waf,profiles,tunnels,stun,history,bans,forwards,routes,forwardStatus,routeStatus,channels,rules,tasks,taskStatus,iplists,siteusers,audit,system,stats,topology,knockRules,dockerContainers,terminalSessions,updateInfo,visitorAudit,wolHosts,storageMounts,fbStatus,smbStatus,perfSnapshot});
     try{C.config=await api('/config')}catch{}
     $('app').style.display='block';$('login').classList.add('hide');
     $('sideVer').textContent='v'+(s.version||'0.2.0');
@@ -681,8 +922,9 @@ fetch('/api/login/oidc/providers').then(r=>r.json()).then(ps=>{
 }).catch(()=>{});
 const p=new URLSearchParams(location.search);
 if(p.get('oidc_code'))fetch('/api/login/oidc/token',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:'code='+encodeURIComponent(p.get('oidc_code'))}).then(r=>r.json()).then(d=>{if(d.token){token=d.token;localStorage.setItem('gately_token',token)}}).catch(()=>{});
-window.addEventListener('hashchange',()=>{const id=location.hash.slice(1);if(id&&PAGES[id]&&id!==current)go(id)});
-const bootId=location.hash.slice(1);if(PAGES[bootId]&&!NAV.flatMap(g=>g.items).find(i=>i.id===bootId&&i.todo))current=bootId;
+window.addEventListener('hashchange',()=>{const raw=location.hash.slice(1);const id=LEGACY[raw]||(raw?'/'+raw.replace(/^\//,''):'');if(id&&PAGES[id]&&id!==current)go(id)});
+const bootRaw=location.hash.slice(1);const bootId=LEGACY[bootRaw]||(bootRaw?'/'+bootRaw.replace(/^\//,''):'');
+if(PAGES[bootId])current=bootId;
 go(current);if(token)refreshData();else showLogin();
 </script>
 <script>
@@ -690,14 +932,14 @@ go(current);if(token)refreshData();else showLogin();
   const overlay=$('gsearch'),input=$('gsearchInput'),results=$('gsearchResults');
   function sources(){
     const out=[];
-    (C.sites||[]).forEach(x=>(x.domains||[]).forEach(d=>out.push({page:'sites',label:'站点 '+d,detail:x.backend||''})));
-    (C.forwards||[]).forEach(x=>out.push({page:'portforward',label:'转发 '+x.name,detail:x.listen+' → '+(x.targets||[]).join(',')}));
-    (C.routes||[]).forEach(x=>out.push({page:'protoroute',label:'分流 '+x.name,detail:x.listen}));
-    (C.ddns||[]).forEach(x=>out.push({page:'ddns',label:'DDNS '+x.name,detail:x.provider}));
-    (C.certs||[]).forEach(x=>out.push({page:'certs',label:'证书 '+x.id,detail:x.cert_path||''}));
-    (C.tasks||[]).forEach(x=>out.push({page:'tasks',label:'任务 '+x.name,detail:x.cron}));
-    (C.iplists||[]).forEach(x=>out.push({page:'iplists',label:'IP 列表 '+x.name,detail:x.url||x.file||''}));
-    (C.siteusers||[]).forEach(x=>out.push({page:'siteusers',label:'用户 '+x.username,detail:x.email||''}));
+    (C.sites||[]).forEach(x=>(x.domains||[]).forEach(d=>out.push({page:'/web',label:'站点 '+d,detail:x.backend||''})));
+    (C.forwards||[]).forEach(x=>out.push({page:'/portforward',label:'转发 '+x.name,detail:x.listen+' → '+(x.targets||[]).join(',')}));
+    (C.routes||[]).forEach(x=>out.push({page:'/protoroute',label:'分流 '+x.name,detail:x.listen}));
+    (C.ddns||[]).forEach(x=>out.push({page:'/ddns',label:'DDNS '+x.name,detail:x.provider}));
+    (C.certs||[]).forEach(x=>out.push({page:'/ssl',label:'证书 '+x.id,detail:x.cert_path||''}));
+    (C.tasks||[]).forEach(x=>out.push({page:'/cron',label:'任务 '+x.name,detail:x.cron}));
+    (C.iplists||[]).forEach(x=>out.push({page:'/iplists',label:'IP 列表 '+x.name,detail:x.url||x.file||''}));
+    (C.siteusers||[]).forEach(x=>out.push({page:'/webusers',label:'用户 '+x.username,detail:x.email||''}));
     return out;
   }
   function render(){

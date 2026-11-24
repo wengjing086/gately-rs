@@ -4,6 +4,7 @@ use crate::config::{
     ApiToken, AuthConfig, CertificateConfig, Config, DdnsTask, IpSource, JailConfig, SiteConfig,
 };
 use crate::ddns::run_and_record;
+use crate::extras;
 use crate::diag;
 use crate::docker;
 use crate::history;
@@ -532,6 +533,8 @@ async fn module_config(State(state): State<AppState>, Path(name): Path<String>, 
         "knock" => "knock", "docker" => "docker", "files" => "files",
         "terminal" => "terminal", "diag" => "diag", "system" => "system",
         "notifications" => "notifications", "backups" => "backups", "admin" => "admin",
+        "wol" => "wol", "storage" => "storage", "filebrowser" => "filebrowser",
+        "smb" => "smb", "perf" => "perf",
         _ => return (StatusCode::NOT_FOUND, format!("unknown module: {name}")).into_response(),
     };
     match payload {
@@ -656,6 +659,7 @@ pub async fn admin_router(state: AppState) -> Router {
         .route("/visitor-audit", get(metrics::visitor_audit_handler))
         .route("/visitor-audit/export", get(metrics::visitor_audit_export))
         .route("/modules/{name}", get(module_config).put(module_config))
+        .merge(extras::router())
         .merge(knock::router(state.clone()))
         .merge(terminal::router(state.clone()))
         .merge(diag::router(state.clone()))

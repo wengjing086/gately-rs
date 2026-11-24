@@ -67,6 +67,16 @@ pub struct Config {
     pub files: FilesConfig,
     #[serde(default)]
     pub terminal: TerminalConfig,
+    #[serde(default)]
+    pub wol: WolConfig,
+    #[serde(default)]
+    pub storage: Vec<StorageMount>,
+    #[serde(default)]
+    pub filebrowser: FileBrowserConfig,
+    #[serde(default)]
+    pub smb: SmbConfig,
+    #[serde(default)]
+    pub perf: PerfConfig,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -1130,6 +1140,125 @@ impl Default for StunTask {
     }
 }
 
+
+
+// ---------------------------------------------------------------------------
+// Additional modules (aligned with upstream Gately navigation positions)
+// ---------------------------------------------------------------------------
+
+/// Wake-on-LAN: send magic packets to hosts on the local network.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct WolConfig {
+    #[serde(default)]
+    pub enabled: bool,
+    #[serde(default = "default_wol_port")]
+    pub port: u16,
+    #[serde(default)]
+    pub hosts: Vec<WolHost>,
+}
+fn default_wol_port() -> u16 { 9 }
+impl Default for WolConfig {
+    fn default() -> Self { Self { enabled: false, port: 9, hosts: Vec::new() } }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct WolHost {
+    pub id: String,
+    pub name: String,
+    pub mac: String,
+    #[serde(default)]
+    pub broadcast: String,
+    #[serde(default)]
+    pub remark: String,
+}
+
+/// A local / remote directory mounted for online file management.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct StorageMount {
+    pub id: String,
+    pub name: String,
+    /// local | webdav | smb
+    #[serde(default)]
+    pub kind: String,
+    pub path: String,
+    #[serde(default)]
+    pub url: String,
+    #[serde(default)]
+    pub username: String,
+    #[serde(default)]
+    pub password: String,
+    #[serde(default)]
+    pub readonly: bool,
+    #[serde(default)]
+    pub enabled: bool,
+}
+
+/// File Browser: web-based file manager settings.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct FileBrowserConfig {
+    #[serde(default)]
+    pub enabled: bool,
+    #[serde(default = "default_fb_listen")]
+    pub listen: String,
+    pub root: String,
+    #[serde(default)]
+    pub base_url: String,
+    #[serde(default)]
+    pub readonly: bool,
+    #[serde(default)]
+    pub users: Vec<FileUser>,
+}
+fn default_fb_listen() -> String { "127.0.0.1:18088".into() }
+impl Default for FileBrowserConfig {
+    fn default() -> Self { Self { enabled: false, listen: default_fb_listen(), root: String::new(), base_url: String::new(), readonly: false, users: Vec::new() } }
+}
+
+/// SMB file sharing service settings (shares reuse `config.files.roots`).
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct SmbConfig {
+    #[serde(default)]
+    pub enabled: bool,
+    #[serde(default = "default_smb_name")]
+    pub workgroup: String,
+    #[serde(default)]
+    pub shares: Vec<SmbShare>,
+}
+fn default_smb_name() -> String { "WORKGROUP".into() }
+impl Default for SmbConfig {
+    fn default() -> Self { Self { enabled: false, workgroup: default_smb_name(), shares: Vec::new() } }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct SmbShare {
+    pub name: String,
+    pub path: String,
+    #[serde(default)]
+    pub readonly: bool,
+    #[serde(default)]
+    pub users: Vec<String>,
+}
+
+/// Performance monitoring thresholds (data source is `/api/metrics`).
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct PerfConfig {
+    #[serde(default)]
+    pub enabled: bool,
+    #[serde(default = "default_perf_interval")]
+    pub interval_secs: u64,
+    #[serde(default)]
+    pub cpu_warn: f64,
+    #[serde(default)]
+    pub mem_warn: f64,
+    #[serde(default)]
+    pub disk_warn: f64,
+    #[serde(default)]
+    pub retention_hours: u64,
+}
+fn default_perf_interval() -> u64 { 30 }
+impl Default for PerfConfig {
+    fn default() -> Self { Self { enabled: true, interval_secs: 30, cpu_warn: 80.0, mem_warn: 85.0, disk_warn: 90.0, retention_hours: 24 } }
+}
+
 impl Default for Config {
     fn default() -> Self {
         Self {
@@ -1174,6 +1303,11 @@ impl Default for Config {
             diag: DiagConfig::default(),
             files: FilesConfig::default(),
             terminal: TerminalConfig::default(),
+            wol: WolConfig::default(),
+            storage: Vec::new(),
+            filebrowser: FileBrowserConfig::default(),
+            smb: SmbConfig::default(),
+            perf: PerfConfig::default(),
         }
     }
 }

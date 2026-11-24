@@ -204,11 +204,11 @@
 
 | 原版能力 | 状态 | 备注 |
 |---|---|---|
-| 配置备份（scrypt + AES-GCM） | 🟡 | 当前备份为明文 JSON（保留策略、定时、目录均已实现），未加密 |
+| 配置备份（scrypt + AES-GCM） | ✅ | `backups.password` 启用加密，恢复时校验口令 |
 | 保留策略 / 定时备份 | ✅ | `backups` |
 | `gately ctl` / `gately mcp` / `gately rollback` | ✅ | MCP 为 stdio 只读桥（tools/list、tools/call） |
 | 网络诊断：Ping / 路由追踪 / 端口探测 / DNS / 测速 / 局域网扫描 | ✅ | — |
-| 网络唤醒（魔术包 / 在线探测 / 语音控制） | 🟡 | 未实现；可通过计划任务调用外部脚本 |
+| 网络唤醒（魔术包） | ✅ | `wol` 模块，UDP 魔法包；在线探测/语音控制未做 |
 | 远程关机 / 重启 / 睡眠 | ❌ | — |
 | 计划任务（cron，执行命令或 HTTP） | ✅ | — |
 | 审计日志 | ✅ | 登录、配置变更、敏感操作；不记录请求体与密钥 |
@@ -218,7 +218,7 @@
 | 已保存的密码与密钥按需显示 | ✅ | 后台直接展示配置中的密钥字段 |
 | 自定义 DNS（DoH） | 🟡 | 配置项存在，未接入解析链路 |
 | 时区 / 模块开关 / 日志级别 / 存储占用 | 🟡 | 时区与模块开关仅存储未生效；日志级别未接入；存储占用未实现 |
-| 全局搜索（Ctrl/⌘+K） | 🟡 | 后台未实现快捷搜索 |
+| 全局搜索（Ctrl/⌘+K） | ✅ | 后台已实现命令面板式全局搜索 |
 | 快速建站向导 / 演示模式 / 卡片视图 / 多选批量 | 🟡 | 列表批量操作已实现，快捷键与视图切换未做 |
 | 更新检查 / 安全公告提示 | ✅ | GitHub Releases + Security Advisories |
 | 飞牛原生应用 / OpenWrt 打包 | ❌ | — |
@@ -235,3 +235,90 @@ v0.4.0 已覆盖原版 **43 个模块族中的 39 个**，其中 25 个为完整
 3. **细节对齐**：GeoIP 离线库、fwknop 原始报文兼容、通知 SOCKS5 代理、用户分组与细粒度权限。
 
 后续批次优先级建议：**备份加密 → 保存前自检与回滚 → 全局搜索与列表视图 → GeoIP → fwknop 兼容 → Passkey → HTTP/3**。
+
+
+---
+
+## 14. 后台菜单位置对照（v0.5.0 逐项复刻）
+
+对照来源：上游 `web/src/nav.ts` + `web/src/navRoutes.ts` + `web/src/locales/zh-CN/nav.json`。
+本项目的侧边栏分组、顺序、命名、路径与汇总页（hub）标签均按上游复刻。
+
+### 无标题组
+| 上游路径 | 上游名称 | 本项目页面 | 状态 |
+|---|---|---|---|
+| /overview | 概览 | /overview | ✅ |
+
+### 网络
+| 上游路径 | 上游名称 | 本项目页面 | 状态 |
+|---|---|---|---|
+| /portforward | 端口转发 | /portforward | ✅ |
+| /protoroute | 协议分流 | /protoroute | ✅ |
+| /ddns | 动态域名 | /ddns | ✅ |
+
+### 安全
+| 上游路径 | 上游名称 | 本项目页面 | 状态 |
+|---|---|---|---|
+| /guard | 入侵防护 | /guard | ✅ |
+| /knock | 端口敲门 | /knock | ✅ |
+| /waf | WAF 防火墙 | /waf | ✅ |
+
+### Web（汇总页：站点 / 网络拓扑 / 访客审计 / 导航面板）
+| 上游路径 | 上游名称 | 本项目页面 | 状态 |
+|---|---|---|---|
+| /web | Web 服务（站点） | /web | ✅ |
+| /web/topology | 网络拓扑 | /web/topology | ✅ |
+| /web/visitors | 访客审计 | /web/visitors | ✅ |
+| /web/panels | 导航面板 | /web/panels | ✅ |
+| /ssl | SSL 证书 | /ssl | ✅ |
+| /webusers | 认证用户 | /webusers | ✅ |
+
+### 组网与穿透（汇总页：Tailscale / NetBird / EasyTier）
+| 上游路径 | 上游名称 | 本项目页面 | 状态 |
+|---|---|---|---|
+| /mesh | 组网 | /mesh | ✅（复用 tunnels） |
+| /mesh/tailscale | Tailscale | /mesh/tailscale | ✅ |
+| /mesh/netbird | NetBird | /mesh/netbird | ✅ |
+| /mesh/easytier | EasyTier | /mesh/easytier | ✅ |
+| /frp | frp | /frp | ✅ |
+| /cloudflared | Cloudflare 隧道 | /cloudflared | ✅ |
+| /stun | STUN 穿透 | /stun | ✅ |
+
+### 文件服务（汇总页：WebDAV / FTP / SMB / 共享用户）
+| 上游路径 | 上游名称 | 本项目页面 | 状态 |
+|---|---|---|---|
+| /files | 文件共享（WebDAV） | /files | ✅ |
+| /files/webdav | WebDAV | /files/webdav | ✅ |
+| /files/ftp | FTP | /files/ftp | ✅ |
+| /files/smb | SMB | /files/smb | ✅（共享配置，SMB2 协议未实现） |
+| /files/users | 共享用户 | /files/users | ✅ |
+| /storage | 存储挂载 | /storage | ✅（配置与连通性检查） |
+| /filebrowser | File Browser | /filebrowser | ✅（配置页，文件管理由 WebDAV 承担） |
+
+### 工具
+| 上游路径 | 上游名称 | 本项目页面 | 状态 |
+|---|---|---|---|
+| /wol | 网络唤醒 | /wol | ✅ |
+| /terminal | Web 终端 | /terminal | ✅ |
+| /nettools | 网络诊断 | /nettools | ✅ |
+| /docker | Docker 管理 | /docker | ✅ |
+| /cron | 计划任务 | /cron | ✅ |
+
+### 系统（汇总页：系统日志 / 操作审计 / 配置历史）
+| 上游路径 | 上游名称 | 本项目页面 | 状态 |
+|---|---|---|---|
+| /notify | 通知中心 | /notify | ✅ |
+| /perf | 性能监控 | /perf | ✅ |
+| /logs | 日志 | /logs | ✅ |
+| /logs/system | 系统日志 | /logs/system | ✅ |
+| /logs/audit | 操作审计 | /logs/audit | ✅ |
+| /logs/history | 配置历史 | /logs/history | ✅ |
+| /settings | 设置 | /settings | ✅ |
+| /api-tokens | API 令牌（隐藏） | /api-tokens | ✅ |
+| /api-docs | API 文档（隐藏） | /api-docs | ✅ |
+| /about | 关于 | /about | ✅ |
+
+说明：
+- 本项目额外保留 `/iplists`、`/update` 两个隐藏页面（上游对应功能在 WAF / 设置内），可从全局搜索进入。
+- 汇总页（/web、/mesh、/files、/logs）在页面顶部显示标签栏，点击标签切换；侧边栏只显示汇总页入口，与上游 `inSidebar` 规则一致。
+- 旧版 hash（如 `#sites`、`#certs`）通过 `LEGACY` 映射自动跳转，外部书签不会失效。

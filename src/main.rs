@@ -4,6 +4,7 @@ mod auth_ext;
 mod cli;
 mod config;
 mod ddns;
+mod extras;
 mod diag;
 mod docker;
 mod filesrv;
