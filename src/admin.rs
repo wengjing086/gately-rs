@@ -316,6 +316,116 @@ fn merge_json(base: &mut Value, patch: &Value) {
     }
 }
 
+/// 点分路径定位配置块，例如 `notifications.channels`。
+fn json_path_mut<'a>(root: &'a mut Value, path: &str) -> Option<&'a mut Value> {
+    let mut cur = root;
+    for part in path.split('.') { cur = cur.get_mut(part)?; }
+    Some(cur)
+}
+
+/// 后台所有列表项共用的新增 / 更新实现。
+/// PUT 表示整体替换（保留 id），PATCH 表示局部合并；两者都会整体反序列化校验后写盘。
+pub(crate) async fn apply_item(
+    state: &AppState,
+    resource: &str,
+    id: Option<&str>,
+    patch: Value,
+    replace: bool,
+) -> Response {
+    let mut config = state.config.write().await;
+    let mut root = match serde_json::to_value(&*config) { Ok(v) => v, Err(e) => return internal(e) };
+    let arr = match json_path_mut(&mut root, resource).and_then(Value::as_array_mut) {
+        Some(a) => a,
+        None => return bad_request(format!("未知资源: {resource}")),
+    };
+    let mut item = match patch.as_object() {
+        Some(o) => o.clone(),
+        None => return bad_request("请求体必须是 JSON 对象"),
+    };
+    let item_id = match id {
+        Some(i) => i.to_string(),
+        None => item.get("id").and_then(Value::as_str).map(str::to_string)
+            .unwrap_or_else(|| new_id(resource.rsplit('.').next().unwrap_or(resource))),
+    };
+    item.insert("id".into(), json!(item_id));
+    match id {
+        Some(_) => {
+            let idx = match arr.iter().position(|v| v.get("id").and_then(Value::as_str) == Some(&item_id)) {
+                Some(i) => i,
+                None => return (StatusCode::NOT_FOUND, "配置项不存在").into_response(),
+            };
+            if replace { arr[idx] = Value::Object(item); } else { merge_json(&mut arr[idx], &Value::Object(item)); }
+        }
+        None => {
+            if arr.iter().any(|v| v.get("id").and_then(Value::as_str) == Some(&item_id)) {
+                return bad_request("ID 已存在");
+            }
+            arr.push(Value::Object(item));
+        }
+    }
+    let updated: Config = match serde_json::from_value(root) { Ok(c) => c, Err(e) => return bad_request(format!("配置无效: {e}")) };
+    if let Err(err) = persist(state, &updated) { return internal(err); }
+    *config = updated;
+    Json(json!({ "ok": true })).into_response()
+}
+
+macro_rules! item_handlers {
+    ($($name:ident => $key:expr),+ $(,)?) => {
+        $(
+            async fn $name(
+                State(state): State<AppState>,
+                method: axum::http::Method,
+                Path(id): Path<String>,
+                Json(patch): Json<Value>,
+            ) -> Response {
+                apply_item(&state, $key, Some(&id), patch, method == axum::http::Method::PUT).await
+            }
+        )+
+    };
+}
+
+item_handlers! {
+    update_listener_item => "listeners",
+    update_site_item => "sites",
+    update_cert_item => "certificates",
+    update_ddns_item => "ddns",
+    update_acme_item => "acme",
+    update_waf_rule_item => "waf_rules",
+    update_waf_profile_item => "waf_profiles",
+    update_tunnel_item => "tunnels",
+    update_stun_item => "stun",
+    update_forward_item => "port_forwards",
+    update_route_item => "proto_routes",
+    update_site_user_item => "site_users",
+    update_ip_list_item => "ip_lists",
+    update_task_item => "scheduled_tasks",
+    update_channel_item => "notifications.channels",
+    update_notify_rule_item => "notifications.rules",
+    update_api_token_item => "admin.api_tokens",
+}
+
+/// 通用新增：用于后台高级表单一次性提交完整配置对象。
+async fn create_item(
+    State(state): State<AppState>,
+    Path(resource): Path<String>,
+    Json(patch): Json<Value>,
+) -> Response {
+    let key = match resource.as_str() {
+        "listeners" => "listeners",
+        "sites" => "sites", "certs" => "certificates", "certificates" => "certificates",
+        "ddns" => "ddns", "acme" => "acme", "waf-rules" | "waf_rules" => "waf_rules",
+        "waf-profiles" | "waf_profiles" => "waf_profiles", "tunnels" => "tunnels", "stun" => "stun",
+        "port-forwards" | "port_forwards" => "port_forwards", "proto-routes" | "proto_routes" => "proto_routes",
+        "site-users" | "site_users" => "site_users", "ip-lists" | "ip_lists" => "ip_lists",
+        "tasks" | "scheduled_tasks" => "scheduled_tasks",
+        "channels" => "notifications.channels", "notify-rules" | "notify_rules" => "notifications.rules",
+        "api-tokens" | "api_tokens" => "admin.api_tokens", "storage" => "storage",
+        "knock-rules" | "knock_rules" => "knock.rules", "wol-hosts" | "wol_hosts" => "wol.hosts",
+        _ => return bad_request(format!("未知资源: {resource}")),
+    };
+    apply_item(&state, key, None, patch, true).await
+}
+
 async fn delete_site(State(state): State<AppState>, Path(id): Path<String>) -> Response {
     let mut config = state.config.write().await;
     config.sites.retain(|s| s.id != id);
@@ -599,61 +709,63 @@ pub async fn admin_router(state: AppState) -> Router {
         .route("/history/{id}", get(history_get))
         .route("/history/{id}/diff", get(history_diff))
         .route("/history/{id}/rollback", post(history_rollback))
+        .route("/listeners/{id}", axum::routing::put(update_listener_item).patch(update_listener_item))
         .route("/sites", get(list_sites).post(add_site))
-        .route("/sites/{id}", axum::routing::patch(update_site).delete(delete_site))
+        .route("/sites/{id}", axum::routing::put(update_site_item).patch(update_site_item).delete(delete_site))
         .route("/certs", get(list_certs).post(add_cert))
-        .route("/certs/{id}", delete(delete_cert))
+        .route("/certs/{id}", axum::routing::put(update_cert_item).patch(update_cert_item).delete(delete_cert))
         .route("/ddns", get(list_ddns).post(add_ddns))
-        .route("/ddns/{id}", delete(delete_ddns))
+        .route("/ddns/{id}", axum::routing::put(update_ddns_item).patch(update_ddns_item).delete(delete_ddns))
         .route("/ddns/{id}/run", post(run_ddns))
         .route("/acme", get(list_acme).post(add_acme))
-        .route("/acme/{id}", delete(delete_acme))
+        .route("/acme/{id}", axum::routing::put(update_acme_item).patch(update_acme_item).delete(delete_acme))
         .route("/acme/{id}/run", post(acme::run_handler))
         .route("/acme/dns-tokens", get(acme::dns_tokens_handler))
         .route("/waf/rules", get(list_waf_rules).post(add_waf_rule))
-        .route("/waf/rules/{id}", delete(delete_waf_rule))
+        .route("/waf/rules/{id}", axum::routing::put(update_waf_rule_item).patch(update_waf_rule_item).delete(delete_waf_rule))
         .route("/waf/profiles", get(list_waf_profiles).post(add_waf_profile))
-        .route("/waf/profiles/{id}", delete(delete_waf_profile))
+        .route("/waf/profiles/{id}", axum::routing::put(update_waf_profile_item).patch(update_waf_profile_item).delete(delete_waf_profile))
         .route("/jail", get(|| async { Json(json!({})) }).post(set_jail))
         .route("/jail/bans", get(banned_ips))
         .route("/jail/ban", post(waf::ban_handler))
         .route("/jail/unban/{ip}", post(waf::unban_handler))
         .route("/tunnels", get(list_tunnels).post(add_tunnel))
-        .route("/tunnels/{id}", delete(delete_tunnel))
+        .route("/tunnels/{id}", axum::routing::put(update_tunnel_item).patch(update_tunnel_item).delete(delete_tunnel))
         .route("/tunnels/status", get(crate::state::tunnel_status_handler))
         .route("/tunnels/{id}/install", post(tunnel::install_handler))
         .route("/tunnels/{id}/rollback", post(tunnel::rollback_handler))
         .route("/stun", get(list_stun).post(add_stun))
-        .route("/stun/{id}", delete(delete_stun))
+        .route("/stun/{id}", axum::routing::put(update_stun_item).patch(update_stun_item).delete(delete_stun))
         .route("/stun/status", get(crate::state::stun_status_handler))
         .route("/stun/{id}/run", post(stun::run_handler))
         .route("/port-forwards", get(list_forwards).post(add_forward))
-        .route("/port-forwards/{id}", delete(delete_forward))
+        .route("/port-forwards/{id}", axum::routing::put(update_forward_item).patch(update_forward_item).delete(delete_forward))
         .route("/port-forwards/status", get(portforward::status_handler))
         .route("/proto-routes", get(list_routes).post(add_route))
-        .route("/proto-routes/{id}", delete(delete_route))
+        .route("/proto-routes/{id}", axum::routing::put(update_route_item).patch(update_route_item).delete(delete_route))
         .route("/proto-routes/status", get(protoroute::status_handler))
         .route("/site-users", get(list_site_users).post(add_site_user))
-        .route("/site-users/{id}", delete(delete_site_user))
+        .route("/site-users/{id}", axum::routing::put(update_site_user_item).patch(update_site_user_item).delete(delete_site_user))
         .route("/ip-lists", get(list_ip_lists).post(add_ip_list))
-        .route("/ip-lists/{id}", delete(delete_ip_list))
+        .route("/ip-lists/{id}", axum::routing::put(update_ip_list_item).patch(update_ip_list_item).delete(delete_ip_list))
         .route("/ip-lists/status", get(portforward::ip_lists_status))
         .route("/notifications", get(|| async { Json(json!({})) }).put(set_notifications))
         .route("/notifications/channels", get(list_channels).post(add_channel))
-        .route("/notifications/channels/{id}", delete(delete_channel))
+        .route("/notifications/channels/{id}", axum::routing::put(update_channel_item).patch(update_channel_item).delete(delete_channel))
         .route("/notifications/rules", get(list_rules).post(add_rule))
-        .route("/notifications/rules/{id}", delete(delete_rule))
+        .route("/notifications/rules/{id}", axum::routing::put(update_notify_rule_item).patch(update_notify_rule_item).delete(delete_rule))
         .route("/notifications/queue", get(notify::queue_handler))
         .route("/notifications/test/{id}", post(notify::test_channel))
         .route("/tasks", get(list_tasks).post(add_task))
-        .route("/tasks/{id}", delete(delete_task))
+        .route("/tasks/{id}", axum::routing::put(update_task_item).patch(update_task_item).delete(delete_task))
         .route("/tasks/{id}/run", post(scheduler::run_handler))
         .route("/tasks/status", get(crate::state::task_status_handler))
         .route("/backups", get(|| async { Json(json!({})) }).put(set_backups))
         .route("/backups/run", post(run_backup))
         .route("/backups/restore", post(restore_backup))
         .route("/api-tokens", get(list_api_tokens).post(add_api_token))
-        .route("/api-tokens/{id}", delete(delete_api_token))
+        .route("/api-tokens/{id}", axum::routing::put(update_api_token_item).patch(update_api_token_item).delete(delete_api_token))
+        .route("/items/{resource}", post(create_item))
         .route("/auth", get(|| async { Json(json!({})) }).post(set_auth))
         .route("/certificates/report", get(metrics::certificate_report))
         .route("/visitor-audit", get(metrics::visitor_audit_handler))

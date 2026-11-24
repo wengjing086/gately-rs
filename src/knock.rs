@@ -1088,10 +1088,20 @@ async fn make_payload(State(state): State<AppState>, Path(id): Path<String>) -> 
 /// 组装敲门相关的 HTTP 路由。
 ///
 /// 路由以 `/knock` 为前缀，由调用方合并进 `/api` 下，因此这里不再带 `/api` 前缀。
+/// 后台通用编辑入口：整对象 PUT / 局部 PATCH 敲门规则。
+async fn update_rule(
+    State(state): State<AppState>,
+    method: axum::http::Method,
+    Path(id): Path<String>,
+    Json(patch): Json<Value>,
+) -> Response {
+    crate::admin::apply_item(&state, "knock.rules", Some(&id), patch, method == axum::http::Method::PUT).await
+}
+
 pub fn router(state: AppState) -> Router<AppState> {
     Router::new()
         .route("/knock/rules", get(list_rules).post(create_rule))
-        .route("/knock/rules/{id}", delete(delete_rule))
+        .route("/knock/rules/{id}", axum::routing::put(update_rule).patch(update_rule).delete(delete_rule))
         .route("/knock/rules/{id}/payload", get(make_payload))
         .route("/knock/grants", get(list_grants))
         .route("/knock/grants/{ip}", delete(revoke_grant))

@@ -2,7 +2,7 @@
 
 用 Rust 编写的边缘网关，借鉴 [Gately](https://github.com/wangwanjie/gately) 的功能设计，是一个**独立的重新实现**。
 
-> 非官方项目，与上游 Gately 无隶属关系。v0.4.0 在 v0.3.0 基础上补齐端口敲门、网络诊断、Docker 管理、Web 终端、WebDAV/FTP 文件服务、统一列表管理、访客审计、加密备份、更新检查、管理端安全入口与模块开关，并提供逐条功能对照矩阵（见 [`docs/FEATURE-MATRIX.md`](docs/FEATURE-MATRIX.md)）。仍是**功能对齐版**，不建议无防护地直接暴露到公网。
+> 非官方项目，与上游 Gately 无隶属关系。v0.6.0 在 v0.4.0/v0.5.0 基础上补齐后台的可操作性：所有列表支持全字段编辑、启停、复制、批量操作与搜索，Docker / 终端 / 设置 / SSL / 入侵防护等页面增加了真实交互面板，并按上游复刻了导航分组与页面位置。逐条功能对照见 [`docs/FEATURE-MATRIX.md`](docs/FEATURE-MATRIX.md)。仍是**功能对齐版**，不建议无防护地直接暴露到公网。
 
 ## 已实现功能
 
@@ -58,9 +58,9 @@ Releases 页面提供三个平台的产物，均带 `.sha256` 校验文件：
 
 | 平台 | 文件名 |
 |---|---|
-| Windows x86_64 | `gately-rs-v0.4.0-windows-x86_64.exe` |
-| Linux x86_64 | `gately-rs-v0.4.0-linux-x86_64`（musl 静态） |
-| Linux ARM64 | `gately-rs-v0.4.0-linux-arm64`（musl 静态） |
+| Windows x86_64 | `gately-rs-v0.6.0-windows-x86_64.exe` |
+| Linux x86_64 | `gately-rs-v0.6.0-linux-x86_64`（musl 静态） |
+| Linux ARM64 | `gately-rs-v0.6.0-linux-arm64`（musl 静态） |
 
 ## 快速开始
 
