@@ -28,29 +28,12 @@ fn expand_ports(listen: &str) -> Result<(String, Vec<u16>), String> {
 
 fn ip_of(addr: SocketAddr) -> String { addr.ip().to_string() }
 
+/// Check whether an address is contained in any of the referenced IP lists.
 async fn list_contains(state: &AppState, list_ids: &[String], ip: &str) -> bool {
     if list_ids.is_empty() { return false; }
     let cfg = state.config.read().await;
-    for id in list_ids {
-        if let Some(list) = cfg.ip_lists.iter().find(|l| &l.id == id) {
-            if list.entries.iter().any(|e| waf::ip_match(e, ip)) { return true; }
-        }
-        if let Some(status) = state.ip_list_status.read().await.get(id) {
-            if status.entries > 0 && list_contains_runtime(state, id, ip).await { return true; }
-        }
-    }
-    false
-}
-
-async fn list_contains_runtime(state: &AppState, id: &str, ip: &str) -> bool {
-    let key = format!("__entries__{id}");
-    let guard = state.ip_list_status.read().await;
-    guard.get(&key).is_some_and(|_| true) && {
-        drop(guard);
-        let cfg = state.config.read().await;
-        cfg.ip_lists.iter().find(|l| l.id == id)
-            .is_some_and(|l| l.entries.iter().any(|e| waf::ip_match(e, ip)))
-    }
+    list_ids.iter().any(|id| cfg.ip_lists.iter().find(|l| &l.id == id)
+        .is_some_and(|l| l.entries.iter().any(|e| waf::ip_match(e, ip))))
 }
 
 async fn allowed_source(state: &AppState, task: &PortForwardTask, ip: &str) -> bool {

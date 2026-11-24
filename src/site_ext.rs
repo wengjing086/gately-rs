@@ -193,7 +193,7 @@ fn rule_match(rule: &crate::config::PathRule, path: &str) -> bool {
     }
 }
 
-pub fn resolve(state: &AppState, site: &SiteConfig, path: &str, query: Option<&str>) -> Resolved {
+pub fn resolve(state: &AppState, site: &SiteConfig, path: &str, query: Option<&str>, user: Option<&str>) -> Resolved {
     for rule in &site.path_rules {
         if !rule_match(rule, path) { continue; }
         let target_path = if rule.rewrite.is_empty() { path.to_string() } else { rule.rewrite.clone() };
@@ -219,7 +219,13 @@ pub fn resolve(state: &AppState, site: &SiteConfig, path: &str, query: Option<&s
         "nav" => Resolved::Response((StatusCode::OK, [("content-type", "text/html; charset=utf-8")], site.nav_html.clone()).into_response()),
         _ => {
             let mut backend = site.backend.clone();
-            if !site.backends.is_empty() {
+            // nginx map $remote_user: pick a dedicated backend for the signed-in user.
+            if let Some(name) = user {
+                if let Some(target) = site.user_backends.get(name) {
+                    if !target.is_empty() { backend = target.clone(); }
+                }
+            }
+            if !site.backends.is_empty() && site.user_backends.is_empty() {
                 let active: Vec<_> = site.backends.iter().filter(|b| b.enabled && b.healthy).collect();
                 if let Some(b) = active.first() { backend = b.url.clone(); }
                 else if let Some(b) = site.backends.iter().find(|b| b.enabled) { backend = b.url.clone(); }
@@ -278,9 +284,68 @@ pub async fn add_user_headers(state: &AppState, site: &SiteConfig, headers: &mut
 
 pub fn build_cache_key(host: &str, path: &str) -> String { format!("{host}{path}") }
 
+/// Resolve the cache TTL for a path: `None` disables caching, `Some(0)` means cache forever.
+pub fn cache_ttl(site: &SiteConfig, path: &str) -> Option<u64> {
+    for rule in &site.cache_rules {
+        let matched = match rule.matcher.as_str() {
+            "exact" => rule.value == path,
+            "regex" => Regex::new(&rule.value).map(|r| r.is_match(path)).unwrap_or(false),
+            _ => path.starts_with(&rule.value),
+        };
+        if !matched { continue; }
+        return match rule.mode.as_str() {
+            "no-cache" | "none" => None,
+            _ => Some(rule.ttl_secs),
+        };
+    }
+    if site.cache_ttl_secs > 0 { Some(site.cache_ttl_secs) } else { None }
+}
+
+pub fn wants_gzip(headers: &HeaderMap) -> bool {
+    headers.get("accept-encoding").and_then(|v| v.to_str().ok())
+        .map(|v| v.to_ascii_lowercase().contains("gzip")).unwrap_or(false)
+}
+
+pub fn gzip_bytes(data: &[u8]) -> Vec<u8> {
+    use flate2::write::GzEncoder;
+    use flate2::Compression;
+    use std::io::Write;
+    let mut encoder = GzEncoder::new(Vec::new(), Compression::default());
+    if encoder.write_all(data).is_err() { return data.to_vec(); }
+    encoder.finish().unwrap_or_else(|_| data.to_vec())
+}
+
+/// Ten built-in error page styles, mirroring the upstream gallery.
+pub fn error_page_html(style: &str, status: u16, message: &str) -> String {
+    let palettes = [
+        ("#0f172a", "#38bdf8"), ("#1f2937", "#f472b6"), ("#0b3d2e", "#34d399"),
+        ("#3b0764", "#c084fc"), ("#450a0a", "#fb7185"), ("#111827", "#facc15"),
+        ("#0c4a6e", "#22d3ee"), ("#2e1065", "#f9a8d4"), ("#052e16", "#a3e635"),
+        ("#1c1917", "#fdba74"),
+    ];
+    let index = match style {
+        "minimal" => 0, "ocean" => 1, "forest" => 2, "purple" => 3, "crimson" => 4,
+        "amber" => 5, "cyan" => 6, "pink" => 7, "lime" => 8, "sand" => 9, _ => 0,
+    };
+    let (bg, accent) = palettes[index];
+    let title = match status {
+        400 => "请求有误", 401 => "需要认证", 403 => "拒绝访问", 404 => "页面不存在",
+        429 => "请求过于频繁", 502 => "后端不可用", 503 => "服务暂不可用", _ => "出错了",
+    };
+    format!(r#"<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>{status} · {title}</title><style>html,body{{margin:0;height:100%;background:{bg};color:#e5e7eb;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Microsoft YaHei',sans-serif;display:grid;place-items:center}}.card{{text-align:center;padding:48px 56px;border-radius:18px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);backdrop-filter:blur(8px)}}.code{{font-size:72px;font-weight:700;color:{accent};line-height:1}}.msg{{margin-top:12px;color:#cbd5e1;font-size:15px}}</style></head><body><div class="card"><div class="code">{status}</div><div class="msg">{title}</div><div class="msg">{message}</div></div></body></html>"#)
+}
+
 pub fn error_response(status: StatusCode, custom: &str, message: &str) -> Response {
-    if custom.is_empty() { (status, message.to_string()).into_response() }
-    else { (status, [("content-type", "text/html; charset=utf-8")], custom.replace("{{status}}", &status.as_u16().to_string())).into_response() }
+    error_response_with_style(status, custom, "", message)
+}
+
+pub fn error_response_with_style(status: StatusCode, custom: &str, style: &str, message: &str) -> Response {
+    if custom.is_empty() {
+        if style.is_empty() { return (status, message.to_string()).into_response(); }
+        let html = error_page_html(style, status.as_u16(), message);
+        return (status, [("content-type", "text/html; charset=utf-8")], html).into_response();
+    }
+    (status, [("content-type", "text/html; charset=utf-8")], custom.replace("{{status}}", &status.as_u16().to_string()).replace("{{message}}", message)).into_response()
 }
 
 pub fn country_from(headers: &HeaderMap) -> String {

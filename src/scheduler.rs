@@ -97,6 +97,48 @@ pub async fn run_handler(State(state): State<AppState>, Path(id): Path<String>) 
     }
 }
 
+const BACKUP_MAGIC: &[u8] = b"GATELYBAK1";
+
+/// Encrypt a backup with scrypt + AES-256-GCM (scrypt derives the key from the password).
+pub fn encrypt_backup(plain: &[u8], password: &str) -> Result<Vec<u8>, String> {
+    use aes_gcm::aead::{Aead, KeyInit};
+    use aes_gcm::{Aes256Gcm, Key, Nonce};
+
+    let salt = uuid::Uuid::new_v4().as_bytes()[..16].to_vec();
+    let mut key_bytes = [0u8; 32];
+    let params = scrypt::Params::new(14, 8, 1, 32).map_err(|e| e.to_string())?;
+    scrypt::scrypt(password.as_bytes(), &salt, &params, &mut key_bytes).map_err(|e| e.to_string())?;
+    let cipher = Aes256Gcm::new(Key::<Aes256Gcm>::from_slice(&key_bytes));
+    let nonce_bytes = uuid::Uuid::new_v4().as_bytes()[..12].to_vec();
+    let nonce = Nonce::from_slice(&nonce_bytes);
+    let ciphertext = cipher.encrypt(&nonce, plain).map_err(|_| "encrypt failed".to_string())?;
+    let mut out = Vec::new();
+    out.extend_from_slice(BACKUP_MAGIC);
+    out.push(1); // version
+    out.extend_from_slice(&salt);
+    out.extend_from_slice(&nonce);
+    out.extend_from_slice(&ciphertext);
+    Ok(out)
+}
+
+pub fn decrypt_backup(data: &[u8], password: &str) -> Result<Vec<u8>, String> {
+    use aes_gcm::aead::{Aead, KeyInit};
+    use aes_gcm::{Aes256Gcm, Key, Nonce};
+
+    if data.len() < BACKUP_MAGIC.len() + 1 + 16 + 12 || !data.starts_with(BACKUP_MAGIC) {
+        return Err("not an encrypted gately backup".into());
+    }
+    let mut offset = BACKUP_MAGIC.len() + 1;
+    let salt = &data[offset..offset + 16]; offset += 16;
+    let nonce = Nonce::from_slice(&data[offset..offset + 12]); offset += 12;
+    let ciphertext = &data[offset..];
+    let mut key_bytes = [0u8; 32];
+    let params = scrypt::Params::new(14, 8, 1, 32).map_err(|e| e.to_string())?;
+    scrypt::scrypt(password.as_bytes(), salt, &params, &mut key_bytes).map_err(|e| e.to_string())?;
+    let cipher = Aes256Gcm::new(Key::<Aes256Gcm>::from_slice(&key_bytes));
+    cipher.decrypt(nonce, ciphertext).map_err(|_| "wrong password or corrupted backup".into())
+}
+
 pub async fn create_backup(state: &AppState) -> Result<String, String> {
     let config: Config = state.config.read().await.clone();
     let text = serde_json::to_string_pretty(&config).map_err(|e| e.to_string())?;
@@ -106,9 +148,14 @@ pub async fn create_backup(state: &AppState) -> Result<String, String> {
         std::path::PathBuf::from(&config.backups.directory)
     };
     std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
-    let name = format!("gately-{}.json", Utc::now().format("%Y%m%d-%H%M%S"));
-    let path = dir.join(name);
-    std::fs::write(&path, text).map_err(|e| e.to_string())?;
+    let stamp = Utc::now().format("%Y%m%d-%H%M%S").to_string();
+    let encrypted = !config.backups.password.is_empty();
+    let name = if encrypted { format!("gately-{stamp}.enc") } else { format!("gately-{stamp}.json") };
+    let path = dir.join(&name);
+    let payload = if encrypted {
+        encrypt_backup(text.as_bytes(), &config.backups.password)?
+    } else { text.into_bytes() };
+    std::fs::write(&path, payload).map_err(|e| e.to_string())?;
     let mut files: Vec<_> = std::fs::read_dir(&dir).map_err(|e| e.to_string())?
         .filter_map(|e| e.ok()).filter(|e| e.file_name().to_string_lossy().starts_with("gately-")).collect();
     files.sort_by_key(|e| e.file_name());
@@ -117,6 +164,20 @@ pub async fn create_backup(state: &AppState) -> Result<String, String> {
         files.remove(0);
     }
     Ok(path.to_string_lossy().to_string())
+}
+
+pub async fn restore_backup(state: &AppState, path: &str, password: &str) -> Result<(), String> {
+    let data = std::fs::read(path).map_err(|e| format!("read backup: {e}"))?;
+    let plain = if data.starts_with(BACKUP_MAGIC) {
+        decrypt_backup(&data, password)?
+    } else { data };
+    let text = String::from_utf8(plain).map_err(|e| e.to_string())?;
+    let config: Config = serde_json::from_str(&text).map_err(|e| format!("parse backup: {e}"))?;
+    if let Ok(old) = std::fs::read_to_string(&state.config_path) { let _ = crate::history::snapshot(&state.config_path, &old); }
+    config.save(&state.config_path).map_err(|e| e.to_string())?;
+    *state.config.write().await = config;
+    crate::notify::emit(state, "backup.restored", path).await;
+    Ok(())
 }
 
 pub fn spawn_ip_list_loop(state: AppState) {
@@ -163,6 +224,59 @@ pub fn spawn_ip_list_loop(state: AppState) {
                 }
             }
             tokio::time::sleep(StdDuration::from_secs(60)).await;
+        }
+    });
+}
+
+/// Periodically probe site backends and update their health flags.
+pub fn spawn_health_check_loop(state: AppState) {
+    tokio::spawn(async move {
+        loop {
+            let targets: Vec<(String, String, String)> = {
+                let cfg = state.config.read().await;
+                cfg.sites.iter().filter(|s| !s.backends.is_empty()).map(|s| {
+                    let path = if s.health_check_path.is_empty() { "/".to_string() } else { s.health_check_path.clone() };
+                    (s.id.clone(), s.backends.iter().map(|b| b.url.clone()).collect::<Vec<_>>().join(","), path)
+                }).collect()
+            };
+            for (site_id, backends, path) in targets {
+                let mut results: Vec<(String, bool)> = Vec::new();
+                for url in backends.split(',').filter(|u| !u.trim().is_empty()) {
+                    let target = format!("{}{}", url.trim_end_matches('/'), path);
+                    let ok = state.client.get(&target).timeout(StdDuration::from_secs(5)).send().await
+                        .map(|r| r.status().is_success()).unwrap_or(false);
+                    results.push((url.trim().to_string(), ok));
+                }
+                let mut cfg = state.config.write().await;
+                if let Some(site) = cfg.sites.iter_mut().find(|s| s.id == site_id) {
+                    for backend in site.backends.iter_mut() {
+                        if let Some((_, ok)) = results.iter().find(|(url, _)| url == &backend.url) { backend.healthy = *ok; }
+                    }
+                }
+                let _ = cfg.save(&state.config_path);
+            }
+            tokio::time::sleep(StdDuration::from_secs(60)).await;
+        }
+    });
+}
+
+/// Compress yesterday's access log so the audit trail stays small on disk.
+pub fn spawn_log_archive_loop(state: AppState) {
+    tokio::spawn(async move {
+        loop {
+            let dir = state.config.read().await.system.access_log_dir.clone();
+            if !dir.is_empty() {
+                let yesterday = (Utc::now() - chrono::Duration::days(1)).format("%Y-%m-%d").to_string();
+                let path = std::path::Path::new(&dir).join(format!("access-{yesterday}.log"));
+                if path.exists() {
+                    if let Ok(data) = std::fs::read(&path) {
+                        let gz = crate::site_ext::gzip_bytes(&data);
+                        let _ = std::fs::write(path.with_extension("log.gz"), gz);
+                        let _ = std::fs::remove_file(&path);
+                    }
+                }
+            }
+            tokio::time::sleep(StdDuration::from_secs(3600)).await;
         }
     });
 }

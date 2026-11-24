@@ -1,8 +1,8 @@
-use crate::state::{AppState, AuditEntry, SiteStats, TrafficCounter};
+use crate::state::{AppState, AuditEntry, SiteStats, TrafficCounter, VisitorAudit};
 use axum::extract::State;
 use axum::response::{IntoResponse, Response};
 use axum::Json;
-use chrono::Utc;
+use chrono::{DateTime, Utc};
 use serde_json::{json, Value};
 use std::collections::HashMap;
 use std::fs;
@@ -58,6 +58,86 @@ pub async fn record_connection(state: &AppState, id: &str, target: &str, kind: &
     stats.traffic.connections += 1;
     stats.backend_health.insert(target.to_string(), true);
     let _ = kind;
+}
+
+/// Per-visitor audit trail, kept in memory and mirrored to the access log directory.
+pub async fn record_visitor(state: &AppState, ip: &str, site_id: &str, path: &str, identity: Option<&str>, blocked: bool) {
+    if ip.is_empty() { return; }
+    let now = Utc::now();
+    {
+        let mut audit = state.visitor_audit.write().await;
+        let entry = audit.entry(ip.to_string()).or_insert_with(|| VisitorAudit {
+            ip: ip.to_string(), sites: HashMap::new(), paths: HashMap::new(), identities: HashMap::new(),
+            blocked: 0, first_seen: now, last_seen: now,
+        });
+        *entry.sites.entry(site_id.to_string()).or_insert(0) += 1;
+        *entry.paths.entry(path.to_string()).or_insert(0) += 1;
+        if let Some(name) = identity { *entry.identities.entry(name.to_string()).or_insert(0) += 1; }
+        if blocked { entry.blocked += 1; }
+        entry.last_seen = now;
+    }
+    let dir = state.config.read().await.system.access_log_dir.clone();
+    if !dir.is_empty() {
+        let file = std::path::Path::new(&dir).join(format!("access-{}.log", now.format("%Y-%m-%d")));
+        let line = format!("{}\t{}\t{}\t{}\t{}\n", now.to_rfc3339(), ip, site_id, path, if blocked { "blocked" } else { "ok" });
+        let _ = tokio::fs::create_dir_all(&dir).await;
+        if let Ok(mut f) = tokio::fs::OpenOptions::new().create(true).append(true).open(&file).await {
+            let _ = futures_lite_append(&mut f, line.as_bytes()).await;
+        }
+    }
+}
+
+async fn futures_lite_append(file: &mut tokio::fs::File, bytes: &[u8]) -> std::io::Result<()> {
+    use tokio::io::AsyncWriteExt;
+    file.write_all(bytes).await
+}
+
+/// Read the expiry date of a PEM certificate using the system `openssl` binary.
+pub async fn cert_expiry(path: &str) -> Option<DateTime<Utc>> {
+    let output = tokio::process::Command::new("openssl").args(["x509", "-noout", "-enddate", "-in", path]).output().await.ok()?;
+    let text = String::from_utf8_lossy(&output.stdout);
+    let raw = text.trim().strip_prefix("notAfter=")?.trim().to_string();
+    chrono::DateTime::parse_from_rfc2822(&raw).ok().map(|dt| dt.with_timezone(&Utc))
+}
+
+pub async fn certificate_report(State(state): State<AppState>) -> Response {
+    let certs = state.config.read().await.certificates.clone();
+    let mut items = Vec::new();
+    for cert in certs {
+        let expiry = cert_expiry(&cert.cert_path).await;
+        let days = expiry.map(|e| (e - Utc::now()).num_days());
+        items.push(json!({
+            "id": cert.id, "domains": cert.domains, "path": cert.cert_path,
+            "expires_at": expiry.map(|e| e.to_rfc3339()), "days_left": days,
+            "expired": days.map(|d| d < 0).unwrap_or(false),
+            "expiring_soon": days.map(|d| (0..30).contains(&d)).unwrap_or(false),
+        }));
+    }
+    Json(json!({ "certificates": items })).into_response()
+}
+
+pub async fn visitor_audit_handler(State(state): State<AppState>) -> Response {
+    let audit = state.visitor_audit.read().await.clone();
+    let mut items: Vec<VisitorAudit> = audit.into_values().collect();
+    items.sort_by(|a, b| b.last_seen.cmp(&a.last_seen));
+    Json(json!({ "total": items.len(), "visitors": items })).into_response()
+}
+
+pub async fn visitor_audit_export(State(state): State<AppState>) -> Response {
+    let audit = state.visitor_audit.read().await.clone();
+    let mut csv = String::from("ip,sites,paths,identities,blocked,first_seen,last_seen\n");
+    for (ip, entry) in audit {
+        csv.push_str(&format!("{},{},{},{},{},{},{}\n",
+            ip,
+            entry.sites.values().sum::<u64>(),
+            entry.paths.len(),
+            entry.identities.values().sum::<u64>(),
+            entry.blocked,
+            entry.first_seen.to_rfc3339(),
+            entry.last_seen.to_rfc3339(),
+        ));
+    }
+    (axum::http::StatusCode::OK, [("content-type", "text/csv; charset=utf-8"), ("content-disposition", "attachment; filename=\"visitor-audit.csv\"")], csv).into_response()
 }
 
 fn read_first_u64(path: &str) -> Option<u64> {

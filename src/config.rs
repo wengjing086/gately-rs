@@ -57,6 +57,16 @@ pub struct Config {
     pub backups: BackupConfig,
     #[serde(default)]
     pub system: SystemConfig,
+    #[serde(default)]
+    pub knock: KnockConfig,
+    #[serde(default)]
+    pub docker: DockerConfig,
+    #[serde(default)]
+    pub diag: DiagConfig,
+    #[serde(default)]
+    pub files: FilesConfig,
+    #[serde(default)]
+    pub terminal: TerminalConfig,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -74,6 +84,15 @@ pub struct AdminConfig {
     pub unauthorized_response: String,
     #[serde(default)]
     pub trusted_proxies: Vec<String>,
+    /// Secret path prefix required to reach the admin UI, e.g. "/secret-abc".
+    #[serde(default)]
+    pub secure_path: String,
+    /// TLS certificate id used to serve the admin UI over HTTPS.
+    #[serde(default)]
+    pub admin_tls_cert: Option<String>,
+    /// Serve the admin UI on a separate HTTPS port.
+    #[serde(default)]
+    pub admin_tls_listen: Option<String>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -114,6 +133,9 @@ pub struct ListenerConfig {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct SiteConfig {
     pub id: String,
+    /// Disabled sites are skipped by the proxy.
+    #[serde(default = "default_true")]
+    pub enabled: bool,
     /// Exact host names (port is stripped before matching). Wildcard "*" matches any host.
     pub domains: Vec<String>,
     /// Backend origin, e.g. http://127.0.0.1:3000
@@ -192,6 +214,18 @@ pub struct SiteConfig {
     pub order: i32,
     #[serde(default)]
     pub remark: String,
+    /// Login user name -> backend url (nginx map $remote_user).
+    #[serde(default)]
+    pub user_backends: HashMap<String, String>,
+    /// Per-path cache rules.
+    #[serde(default)]
+    pub cache_rules: Vec<CacheRule>,
+    /// Built-in error page style id or custom HTML.
+    #[serde(default)]
+    pub error_page_style: String,
+    /// Record per-visitor audit entries.
+    #[serde(default)]
+    pub visitor_audit: bool,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -211,6 +245,20 @@ pub struct PathRule {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct CacheRule {
+    /// prefix | exact | regex
+    #[serde(default)]
+    pub matcher: String,
+    #[serde(default)]
+    pub value: String,
+    /// no-cache | ttl
+    #[serde(default)]
+    pub mode: String,
+    #[serde(default)]
+    pub ttl_secs: u64,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Backend {
     pub url: String,
     #[serde(default = "default_true")]
@@ -226,6 +274,8 @@ pub struct Backend {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct CertificateConfig {
     pub id: String,
+    #[serde(default = "default_true")]
+    pub enabled: bool,
     pub cert_path: String,
     pub key_path: String,
     #[serde(default)]
@@ -289,6 +339,8 @@ pub enum IpSource {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct AcmeTask {
     pub id: String,
+    #[serde(default = "default_true")]
+    pub enabled: bool,
     pub domains: Vec<String>,
     pub email: String,
     #[serde(default = "default_provider")]
@@ -355,6 +407,8 @@ fn default_action() -> String { "deny".into() }
 pub struct WafProfile {
     pub id: String,
     pub name: String,
+    #[serde(default = "default_true")]
+    pub enabled: bool,
     pub rule_ids: Vec<String>,
     #[serde(default = "default_waf_mode")]
     pub mode: String,
@@ -802,7 +856,15 @@ pub struct SystemConfig {
     pub audit_retention_days: u64,
     #[serde(default)]
     pub unauth_response: String,
+    #[serde(default = "default_audit_days")]
+    pub visitor_audit_days: u64,
+    #[serde(default)]
+    pub access_log_dir: String,
+    #[serde(default)]
+    pub update_repo: String,
 }
+
+fn default_audit_days() -> u64 { 7 }
 
 impl Default for SystemConfig {
     fn default() -> Self {
@@ -810,14 +872,206 @@ impl Default for SystemConfig {
             timezone: String::new(), dns_servers: Vec::new(), doh_url: String::new(),
             log_level: "info".into(), update_check: true, disabled_modules: Vec::new(),
             audit_retention_days: 30, unauth_response: String::new(),
+            visitor_audit_days: default_audit_days(), access_log_dir: String::new(),
+            update_repo: "wengjing086/gately-rs".into(),
         }
+    }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct KnockConfig {
+    #[serde(default)]
+    pub enabled: bool,
+    /// none | nftables | iptables | ipset
+    #[serde(default)]
+    pub backend: String,
+    #[serde(default)]
+    pub nft_table: String,
+    #[serde(default)]
+    pub nft_chain: String,
+    /// Allowed clock skew in seconds for a knock packet.
+    #[serde(default = "default_knock_window")]
+    pub window_secs: u64,
+    /// How long a successful knock unlocks the source address.
+    #[serde(default = "default_knock_ttl")]
+    pub grant_ttl_secs: u64,
+    #[serde(default)]
+    pub rules: Vec<KnockRule>,
+}
+
+fn default_knock_window() -> u64 { 30 }
+fn default_knock_ttl() -> u64 { 300 }
+
+impl Default for KnockConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false, backend: "none".into(), nft_table: "gately".into(),
+            nft_chain: "gately_knock".into(), window_secs: default_knock_window(),
+            grant_ttl_secs: default_knock_ttl(), rules: Vec::new(),
+        }
+    }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct KnockRule {
+    pub id: String,
+    pub name: String,
+    /// Base64 encoded 32-byte AES key.
+    #[serde(default)]
+    pub aes_key: String,
+    /// Base64 encoded 32-byte HMAC key.
+    #[serde(default)]
+    pub hmac_key: String,
+    /// Ports that become reachable after a successful knock.
+    #[serde(default)]
+    pub ports: Vec<u16>,
+    /// Shared users allowed to knock (identity per user).
+    #[serde(default)]
+    pub identities: Vec<String>,
+    #[serde(default = "default_true")]
+    pub enabled: bool,
+    /// Reject knocks from an address that is already granted by another rule.
+    #[serde(default)]
+    pub single_address: bool,
+    #[serde(default)]
+    pub group: String,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct DockerConfig {
+    #[serde(default)]
+    pub enabled: bool,
+    #[serde(default)]
+    pub host: String,
+    #[serde(default)]
+    pub socket: String,
+    #[serde(default)]
+    pub compose_file: String,
+    #[serde(default)]
+    pub compose_dir: String,
+    #[serde(default)]
+    pub registry: String,
+}
+
+impl Default for DockerConfig {
+    fn default() -> Self {
+        Self { enabled: false, host: String::new(), socket: String::new(), compose_file: String::new(), compose_dir: String::new(), registry: String::new() }
+    }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct DiagConfig {
+    #[serde(default = "default_ping_count")]
+    pub ping_count: u32,
+    #[serde(default = "default_diag_timeout")]
+    pub timeout_secs: u64,
+    /// Allowed target CIDRs; empty means everything is allowed.
+    #[serde(default)]
+    pub allowed_targets: Vec<String>,
+    #[serde(default)]
+    pub enabled: bool,
+}
+
+fn default_ping_count() -> u32 { 4 }
+fn default_diag_timeout() -> u64 { 10 }
+
+impl Default for DiagConfig {
+    fn default() -> Self {
+        Self { ping_count: default_ping_count(), timeout_secs: default_diag_timeout(), allowed_targets: Vec::new(), enabled: true }
+    }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct FilesConfig {
+    #[serde(default)]
+    pub webdav: FileServiceConfig,
+    #[serde(default)]
+    pub ftp: FileServiceConfig,
+}
+
+impl Default for FilesConfig {
+    fn default() -> Self { Self { webdav: FileServiceConfig::default(), ftp: FileServiceConfig::default() } }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct FileServiceConfig {
+    #[serde(default)]
+    pub enabled: bool,
+    #[serde(default)]
+    pub listen: String,
+    #[serde(default)]
+    pub roots: Vec<FileRoot>,
+    #[serde(default)]
+    pub passive_port_start: u16,
+    #[serde(default)]
+    pub passive_port_end: u16,
+    #[serde(default)]
+    pub readonly: bool,
+    /// Account -> password for anonymous-safe access.
+    #[serde(default)]
+    pub users: Vec<FileUser>,
+    /// Password hash is stored as plain text in the JSON config.
+    #[serde(default)]
+    pub require_login: bool,
+}
+
+impl Default for FileServiceConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false, listen: String::new(), roots: Vec::new(),
+            passive_port_start: 40000, passive_port_end: 40100, readonly: false,
+            users: Vec::new(), require_login: true,
+        }
+    }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct FileRoot {
+    pub id: String,
+    pub name: String,
+    pub path: String,
+    #[serde(default)]
+    pub readonly: bool,
+    #[serde(default)]
+    pub users: Vec<String>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct FileUser {
+    pub username: String,
+    pub password: String,
+    #[serde(default)]
+    pub readonly: bool,
+    #[serde(default)]
+    pub roots: Vec<String>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct TerminalConfig {
+    #[serde(default)]
+    pub enabled: bool,
+    #[serde(default)]
+    pub allow_local_shell: bool,
+    #[serde(default)]
+    pub allow_ssh: bool,
+    #[serde(default)]
+    pub allow_telnet: bool,
+    #[serde(default)]
+    pub idle_timeout_secs: u64,
+    #[serde(default)]
+    pub motd: String,
+}
+
+impl Default for TerminalConfig {
+    fn default() -> Self {
+        Self { enabled: false, allow_local_shell: false, allow_ssh: false, allow_telnet: false, idle_timeout_secs: 1800, motd: String::new() }
     }
 }
 
 impl Default for SiteConfig {
     fn default() -> Self {
         Self {
-            id: String::new(), domains: Vec::new(), backend: String::new(), listener: None,
+            id: String::new(), enabled: true, domains: Vec::new(), backend: String::new(), listener: None,
             kind: default_site_kind(), redirect_url: String::new(), static_root: String::new(),
             text_body: String::new(), nav_html: String::new(), waf_profile: None,
             waf_mode: default_waf_mode(), allowed_ips: Vec::new(), denied_ips: Vec::new(),
@@ -828,6 +1082,8 @@ impl Default for SiteConfig {
             cache_ttl_secs: 0, compression: false, proxy_protocol: false, knock_required: false,
             drop_on_deny: false, geo_allow: Vec::new(), geo_deny: Vec::new(), error_page: String::new(),
             intercept_errors: false, group: String::new(), order: 0, remark: String::new(),
+            user_backends: HashMap::new(), cache_rules: Vec::new(), error_page_style: String::new(),
+            visitor_audit: false,
         }
     }
 }
@@ -847,7 +1103,7 @@ impl Default for DdnsTask {
 impl Default for CertificateConfig {
     fn default() -> Self {
         Self {
-            id: String::new(), cert_path: String::new(), key_path: String::new(), acme_id: None,
+            id: String::new(), enabled: true, cert_path: String::new(), key_path: String::new(), acme_id: None,
             domains: Vec::new(), deploy_ssh: Vec::new(), deploy_containers: Vec::new(), hook: String::new(),
         }
     }
@@ -886,6 +1142,9 @@ impl Default for Config {
                 lan_only: false,
                 unauthorized_response: String::new(),
                 trusted_proxies: Vec::new(),
+                secure_path: String::new(),
+                admin_tls_cert: None,
+                admin_tls_listen: None,
             },
             listeners: vec![ListenerConfig {
                 name: "http".into(), listen: "0.0.0.0:18080".into(), tls_cert: None,
@@ -910,6 +1169,11 @@ impl Default for Config {
             scheduled_tasks: Vec::new(),
             backups: BackupConfig::default(),
             system: SystemConfig::default(),
+            knock: KnockConfig::default(),
+            docker: DockerConfig::default(),
+            diag: DiagConfig::default(),
+            files: FilesConfig::default(),
+            terminal: TerminalConfig::default(),
         }
     }
 }
@@ -926,6 +1190,11 @@ impl Default for AuthConfig {
 }
 
 impl Config {
+    /// Runtime module switch: `system.disabled_modules` may list "ddns", "waf", ...
+    pub fn module_disabled(&self, name: &str) -> bool {
+        self.system.disabled_modules.iter().any(|m| m.eq_ignore_ascii_case(name))
+    }
+
     pub fn load(path: &Path) -> Result<Self, String> {
         if !path.exists() {
             let cfg = Self::default();

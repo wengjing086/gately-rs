@@ -4,14 +4,20 @@ use crate::config::{
     ApiToken, AuthConfig, CertificateConfig, Config, DdnsTask, IpSource, JailConfig, SiteConfig,
 };
 use crate::ddns::run_and_record;
+use crate::diag;
+use crate::docker;
 use crate::history;
+use crate::knock;
+use crate::lists;
 use crate::metrics;
 use crate::migrate;
 use crate::notify;
 use crate::scheduler;
 use crate::site_ext;
 use crate::state::AppState;
+use crate::terminal;
 use crate::tunnel;
+use crate::update;
 use crate::waf;
 use crate::{portforward, protoroute, stun};
 use axum::extract::{Path, Request, State};
@@ -56,16 +62,25 @@ fn persist(state: &AppState, config: &Config) -> Result<(), String> {
     config.save(&state.config_path)
 }
 
-async fn authenticated_token(state: &AppState, headers: &axum::http::HeaderMap) -> Option<String> {
+async fn authenticated_token(state: &AppState, headers: &axum::http::HeaderMap, query: Option<&str>) -> Option<String> {
     let supplied = headers.get(AUTHORIZATION).and_then(|v| v.to_str().ok())
-        .and_then(|v| v.strip_prefix("Bearer "))?.to_string();
+        .and_then(|v| v.strip_prefix("Bearer "))
+        .map(str::to_string)
+        .or_else(|| {
+            // WebSocket 等无法自定义请求头的场景允许通过 ?token= 传递。
+            let raw = query?;
+            raw.split('&').find_map(|pair| {
+                let (k, v) = pair.split_once('=')?;
+                if k == "token" { Some(v.to_string()) } else { None }
+            })
+        })?;
     let cfg = state.config.read().await;
     if supplied == cfg.admin.token { return Some("admin".into()); }
     cfg.admin.api_tokens.iter().find(|t| t.enabled && t.token == supplied).map(|t| t.id.clone())
 }
 
 async fn require_auth(State(state): State<AppState>, req: Request, next: Next) -> Response {
-    let actor = authenticated_token(&state, req.headers()).await;
+    let actor = authenticated_token(&state, req.headers(), req.uri().query()).await;
     match actor {
         Some(actor) => {
             let method = req.method().to_string();
@@ -88,6 +103,63 @@ async fn require_auth(State(state): State<AppState>, req: Request, next: Next) -
             }
         }
     }
+}
+
+/// Secret entry path: everything must be prefixed with `admin.secure_path`.
+async fn secure_entry(State(state): State<AppState>, mut req: Request, next: Next) -> Response {
+    let prefix = state.config.read().await.admin.secure_path.clone();
+    if prefix.is_empty() { return next.run(req).await; }
+    let prefix = if prefix.starts_with('/') { prefix } else { format!("/{prefix}") };
+    let path = req.uri().path().to_string();
+    if !path.starts_with(&prefix) {
+        return (StatusCode::NOT_FOUND, "").into_response();
+    }
+    let stripped = path.strip_prefix(&prefix).unwrap_or("/");
+    let stripped = if stripped.is_empty() { "/" } else { stripped };
+    let query = req.uri().query().map(|q| format!("?{q}")).unwrap_or_default();
+    if let Ok(uri) = format!("{stripped}{query}").parse::<axum::http::Uri>() {
+        *req.uri_mut() = uri;
+    }
+    next.run(req).await
+}
+
+fn is_private_ip(ip: std::net::IpAddr) -> bool {
+    match ip {
+        std::net::IpAddr::V4(v4) => v4.is_private() || v4.is_loopback() || v4.is_link_local(),
+        std::net::IpAddr::V6(v6) => v6.is_loopback()
+            || (v6.segments()[0] & 0xfe00) == 0xfc00
+            || (v6.segments()[0] & 0xffc0) == 0xfe80,
+    }
+}
+
+/// Reject non-LAN clients when `admin.lan_only` is enabled.
+async fn lan_only_guard(State(state): State<AppState>, req: Request, next: Next) -> Response {
+    let enabled = state.config.read().await.admin.lan_only;
+    if !enabled { return next.run(req).await; }
+    let peer = req.extensions().get::<axum::extract::ConnectInfo<std::net::SocketAddr>>().map(|c| c.0.ip());
+    match peer {
+        Some(ip) if is_private_ip(ip) => next.run(req).await,
+        Some(ip) => (StatusCode::FORBIDDEN, format!("仅允许内网访问（来源 {ip}）")).into_response(),
+        None => (StatusCode::FORBIDDEN, "仅允许内网访问").into_response(),
+    }
+}
+
+/// Resolve the real client address, honouring trusted reverse proxies.
+pub async fn client_ip(state: &AppState, req: &Request) -> String {
+    let peer = req.extensions().get::<axum::extract::ConnectInfo<std::net::SocketAddr>>().map(|c| c.0.ip());
+    let trusted_proxies = state.config.read().await.admin.trusted_proxies.clone();
+    let is_trusted = peer.is_some_and(|ip| {
+        trusted_proxies.iter().any(|pattern| crate::waf::ip_match(pattern, &ip.to_string()))
+    });
+    if is_trusted {
+        if let Some(forwarded) = req.headers().get("x-forwarded-for").and_then(|v| v.to_str().ok()) {
+            if let Some(first) = forwarded.split(',').next() {
+                let candidate = first.trim();
+                if !candidate.is_empty() { return candidate.to_string(); }
+            }
+        }
+    }
+    peer.map(|ip| ip.to_string()).unwrap_or_default()
 }
 
 async fn ui() -> Html<&'static str> { Html(include_str!("ui.html")) }
@@ -173,7 +245,37 @@ async fn reload_config(State(state): State<AppState>) -> Response {
     Json(json!({"ok": true})).into_response()
 }
 
+/// Verify that every changed listen address can actually be bound before saving.
+async fn verify_listeners(old: &Config, new: &Config) -> Result<(), String> {
+    let mut candidates: Vec<String> = Vec::new();
+    if old.admin.listen != new.admin.listen { candidates.push(new.admin.listen.clone()); }
+    let old_listeners: Vec<String> = old.listeners.iter().map(|l| l.listen.clone()).collect();
+    for listener in &new.listeners {
+        if !old_listeners.contains(&listener.listen) { candidates.push(listener.listen.clone()); }
+    }
+    let old_forwards: Vec<String> = old.port_forwards.iter().map(|f| f.listen.clone()).collect();
+    for forward in &new.port_forwards {
+        if !old_forwards.contains(&forward.listen) { candidates.push(forward.listen.clone()); }
+    }
+    let old_routes: Vec<String> = old.proto_routes.iter().map(|r| r.listen.clone()).collect();
+    for route in &new.proto_routes {
+        if !old_routes.contains(&route.listen) { candidates.push(route.listen.clone()); }
+    }
+    for address in candidates {
+        let target = address.replace("0.0.0.0", "127.0.0.1").replace("[::]", "::1");
+        match std::net::TcpListener::bind(&target) {
+            Ok(listener) => drop(listener),
+            Err(err) => return Err(format!("监听地址 {address} 不可用：{err}")),
+        }
+    }
+    Ok(())
+}
+
 async fn set_config(State(state): State<AppState>, Json(payload): Json<Config>) -> Response {
+    let old = state.config.read().await.clone();
+    if let Err(err) = verify_listeners(&old, &payload).await {
+        return (StatusCode::BAD_REQUEST, format!("配置未保存：{err}")).into_response();
+    }
     if let Err(err) = persist(&state, &payload) { return internal(err); }
     *state.config.write().await = payload;
     Json(json!({"ok": true})).into_response()
@@ -422,6 +524,35 @@ async fn banned_ips(State(state): State<AppState>) -> Response {
     Json(state.banned_ips.read().await.clone()).into_response()
 }
 
+/// Read or update a sub-module configuration block (knock/docker/files/terminal/diag/...).
+async fn module_config(State(state): State<AppState>, Path(name): Path<String>, payload: Option<Json<Value>>) -> Response {
+    let mut config = state.config.write().await;
+    let mut root = match serde_json::to_value(&*config) { Ok(v) => v, Err(e) => return internal(e) };
+    let key = match name.as_str() {
+        "knock" => "knock", "docker" => "docker", "files" => "files",
+        "terminal" => "terminal", "diag" => "diag", "system" => "system",
+        "notifications" => "notifications", "backups" => "backups", "admin" => "admin",
+        _ => return (StatusCode::NOT_FOUND, format!("unknown module: {name}")).into_response(),
+    };
+    match payload {
+        None => {
+            let value = root.get(key).cloned().unwrap_or(Value::Null);
+            Json(value).into_response()
+        }
+        Some(Json(patch)) => {
+            let current = root.get(key).cloned().unwrap_or(json!({}));
+            let mut merged = current;
+            merge_json(&mut merged, &patch);
+            if let Some(obj) = root.as_object_mut() { obj.insert(key.to_string(), merged); }
+            let updated: Config = match serde_json::from_value(root) { Ok(c) => c, Err(e) => return bad_request(format!("配置无效: {e}")) };
+            if let Ok(text) = fs::read_to_string(&state.config_path) { let _ = history::snapshot(&state.config_path, &text); }
+            if let Err(err) = updated.save(&state.config_path) { return internal(err); }
+            *config = updated;
+            Json(json!({ "ok": true })).into_response()
+        }
+    }
+}
+
 async fn run_backup(State(state): State<AppState>) -> Response {
     match scheduler::create_backup(&state).await {
         Ok(path) => Json(json!({"ok": true, "path": path})).into_response(),
@@ -429,7 +560,17 @@ async fn run_backup(State(state): State<AppState>) -> Response {
     }
 }
 
-pub fn admin_router(state: AppState) -> Router {
+#[derive(Debug, Deserialize)]
+pub struct RestoreRequest { pub path: String, #[serde(default)] pub password: String }
+
+async fn restore_backup(State(state): State<AppState>, Json(payload): Json<RestoreRequest>) -> Response {
+    match scheduler::restore_backup(&state, &payload.path, &payload.password).await {
+        Ok(()) => Json(json!({"ok": true})).into_response(),
+        Err(err) => (StatusCode::BAD_GATEWAY, err).into_response(),
+    }
+}
+
+pub async fn admin_router(state: AppState) -> Router {
     let public = Router::new()
         .route("/login", post(login))
         .route("/login/totp", post(auth_ext::totp_handler))
@@ -507,14 +648,37 @@ pub fn admin_router(state: AppState) -> Router {
         .route("/tasks/status", get(crate::state::task_status_handler))
         .route("/backups", get(|| async { Json(json!({})) }).put(set_backups))
         .route("/backups/run", post(run_backup))
+        .route("/backups/restore", post(restore_backup))
         .route("/api-tokens", get(list_api_tokens).post(add_api_token))
         .route("/api-tokens/{id}", delete(delete_api_token))
         .route("/auth", get(|| async { Json(json!({})) }).post(set_auth))
+        .route("/certificates/report", get(metrics::certificate_report))
+        .route("/visitor-audit", get(metrics::visitor_audit_handler))
+        .route("/visitor-audit/export", get(metrics::visitor_audit_export))
+        .route("/modules/{name}", get(module_config).put(module_config))
+        .merge(knock::router(state.clone()))
+        .merge(terminal::router(state.clone()))
+        .merge(diag::router(state.clone()))
+        .merge(docker::router(state.clone()))
+        .merge(lists::router(state.clone()))
+        .merge(update::router(state.clone()))
         .route_layer(middleware::from_fn_with_state(state.clone(), require_auth));
 
-    Router::new()
+    let api = public.merge(protected);
+    let app = Router::new()
         .route("/", get(ui))
         .route("/ui", get(ui))
-        .nest("/api", public.merge(protected))
+        .nest("/api", api);
+
+    // Secret entry path: the whole admin surface lives under the configured prefix.
+    let prefix = state.config.read().await.admin.secure_path.clone();
+    let app = if prefix.is_empty() {
+        app
+    } else {
+        let prefix = if prefix.starts_with('/') { prefix } else { format!("/{prefix}") };
+        Router::new().nest(&prefix, app)
+    };
+
+    app.layer(middleware::from_fn_with_state(state.clone(), lan_only_guard))
         .with_state(state)
 }

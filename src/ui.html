@@ -31,6 +31,15 @@ svg{width:18px;height:18px;flex:none;stroke:currentColor;fill:none;stroke-width:
 .mini{font-size:12px}
 .hide{display:none!important}
 
+
+/* ---------- 全局搜索 ---------- */
+.gsearch{position:fixed;inset:0;z-index:120;background:rgba(15,17,19,.55);backdrop-filter:blur(3px);display:flex;align-items:flex-start;justify-content:center;padding-top:12vh}
+.gsearch-box{width:min(680px,92vw);background:var(--surface);border:1px solid var(--border);border-radius:14px;box-shadow:0 24px 60px -30px rgba(0,0,0,.6);overflow:hidden}
+.gsearch-box>input{width:100%;border:0;border-bottom:1px solid var(--border);background:transparent;outline:none;padding:16px 18px;font-size:15px;color:var(--text)}
+.gsearch-results{max-height:52vh;overflow:auto}
+.gsearch-item{display:flex;justify-content:space-between;gap:12px;padding:10px 18px;cursor:pointer;border-bottom:1px solid var(--border-soft)}
+.gsearch-item:hover{background:var(--accent-soft)}
+
 /* ---------- 登录 ---------- */
 #login{position:fixed;inset:0;z-index:100;display:flex;align-items:center;justify-content:center;padding:20px;
   background:radial-gradient(60% 70% at 50% 0%,var(--accent-soft),transparent 70%),var(--page)}
@@ -235,6 +244,12 @@ pre{margin:8px 0 0;padding:12px;border-radius:8px;background:var(--page);border:
 
 <div id="modal"><div class="dialog"><div class="dialog-head"><span id="dlgTitle"></span><button class="icon-btn" id="dlgClose">×</button></div><div class="dialog-body" id="dlgBody"></div><div class="dialog-foot" id="dlgFoot"></div></div></div>
 <div id="toasts"></div>
+<div id="gsearch" class="gsearch hide">
+  <div class="gsearch-box">
+    <input id="gsearchInput" placeholder="全局搜索：站点域名、端口转发、DDNS、证书、任务（Ctrl/⌘+K）">
+    <div id="gsearchResults" class="gsearch-results"></div>
+  </div>
+</div>
 
 <script>
 const ICON={
@@ -255,17 +270,18 @@ function ico(n){return '<svg viewBox="0 0 24 24"><path d="'+(ICON[n]||ICON.dashb
 
 const NAV=[
  {g:'',items:[{id:'overview',name:'总览',icon:'dashboard'}]},
- {g:'网络',items:[{id:'ddns',name:'动态域名',icon:'globe'},{id:'portforward',name:'端口转发',icon:'route'},{id:'protoroute',name:'协议分流',icon:'route'},{id:'stun',name:'STUN 探测',icon:'globe'}]},
- {g:'安全',items:[{id:'waf',name:'WAF 规则',icon:'shield'},{id:'jail',name:'入侵防护',icon:'shield'},{id:'iplists',name:'IP 列表',icon:'shield'},{id:'siteusers',name:'站点用户',icon:'key'}]},
+ {g:'网络',items:[{id:'ddns',name:'动态域名',icon:'globe'},{id:'portforward',name:'端口转发',icon:'route'},{id:'protoroute',name:'协议分流',icon:'route'},{id:'stun',name:'STUN 探测',icon:'globe'},{id:'diag',name:'网络诊断',icon:'log'}]},
+ {g:'安全',items:[{id:'waf',name:'WAF 规则',icon:'shield'},{id:'jail',name:'入侵防护',icon:'shield'},{id:'knock',name:'端口敲门',icon:'shield'},{id:'iplists',name:'IP 列表',icon:'shield'},{id:'siteusers',name:'站点用户',icon:'key'}]},
  {g:'Web 服务',items:[{id:'sites',name:'Web 站点',icon:'server'},{id:'certs',name:'TLS 证书',icon:'key'},{id:'acme',name:'ACME 证书',icon:'key'},{id:'topology',name:'网络拓扑',icon:'route'},{id:'stats',name:'访问统计',icon:'log'}]},
- {g:'隧道',items:[{id:'tunnels',name:'隧道托管',icon:'tunnel'}]},
- {g:'系统',items:[{id:'notifications',name:'通知中心',icon:'log'},{id:'tasks',name:'计划任务',icon:'clock'},{id:'history',name:'配置历史',icon:'history'},{id:'audit',name:'审计日志',icon:'log'},{id:'import',name:'导入迁移',icon:'import'},{id:'auth',name:'认证安全',icon:'key'},{id:'system',name:'系统设置',icon:'settings'}]}
+ {g:'隧道',items:[{id:'tunnels',name:'隧道托管',icon:'tunnel'}]},{g:'应用',items:[{id:'docker',name:'Docker 管理',icon:'settings'},{id:'terminal',name:'Web 终端',icon:'tunnel'},{id:'files',name:'文件服务',icon:'import'}]},
+ {g:'系统',items:[{id:'notifications',name:'通知中心',icon:'log'},{id:'tasks',name:'计划任务',icon:'clock'},{id:'history',name:'配置历史',icon:'history'},{id:'audit',name:'审计日志',icon:'log'},{id:'import',name:'导入迁移',icon:'import'},{id:'auth',name:'认证安全',icon:'key'},{id:'system',name:'系统设置',icon:'settings'},{id:'update',name:'版本更新',icon:'history'}]}
 ];
-const PAGES={overview:'总览',ddns:'动态域名',portforward:'端口转发',protoroute:'协议分流',waf:'WAF 规则',jail:'入侵防护',iplists:'IP 列表',siteusers:'站点用户',sites:'Web 站点',certs:'TLS 证书',acme:'ACME 证书',topology:'网络拓扑',stats:'访问统计',tunnels:'隧道托管',stun:'STUN 探测',notifications:'通知中心',tasks:'计划任务',history:'配置历史',audit:'审计日志',import:'导入迁移',auth:'认证安全',system:'系统设置'};
+const PAGES={overview:'总览',ddns:'动态域名',portforward:'端口转发',protoroute:'协议分流',waf:'WAF 规则',jail:'入侵防护',iplists:'IP 列表',siteusers:'站点用户',sites:'Web 站点',certs:'TLS 证书',acme:'ACME 证书',topology:'网络拓扑',stats:'访问统计',tunnels:'隧道托管',stun:'STUN 探测',notifications:'通知中心',tasks:'计划任务',history:'配置历史',audit:'审计日志',import:'导入迁移',auth:'认证安全',system:'系统设置',diag:'网络诊断',knock:'端口敲门',docker:'Docker 管理',terminal:'Web 终端',files:'文件服务',update:'版本更新'};
 
+const API_BASE=(function(){const p=location.pathname;return p.replace(/\/ui\/?$/,'').replace(/\/$/,'');})();
 const $=id=>document.getElementById(id);
 let token=localStorage.getItem('gately_token')||'';
-let current='overview', C={status:null,config:null,sites:[],certs:[],ddns:[],acme:[],waf:[],profiles:[],tunnels:[],stun:[],history:[],bans:[],forwards:[],routes:[],forwardStatus:{},routeStatus:{},channels:[],rules:[],tasks:[],taskStatus:{},iplists:[],siteusers:[],audit:[],system:null,stats:null,topology:null};
+let current='overview', C={status:null,config:null,sites:[],certs:[],ddns:[],acme:[],waf:[],profiles:[],tunnels:[],stun:[],history:[],bans:[],forwards:[],routes:[],forwardStatus:{},routeStatus:{},channels:[],rules:[],tasks:[],taskStatus:{},iplists:[],siteusers:[],audit:[],system:null,stats:null,topology:null,knockRules:[],dockerContainers:[],terminalSessions:[],updateInfo:null,visitorAudit:null};
 const split=v=>String(v||'').split(',').map(x=>x.trim()).filter(Boolean);
 const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const short=v=>{v=String(v??'');return v.length>34?v.slice(0,31)+'…':v};
@@ -279,7 +295,7 @@ async function api(path,opt){
   opt=Object.assign({},opt||{});opt.headers=Object.assign({},opt.headers||{});
   if(token)opt.headers.Authorization='Bearer '+token;
   if(opt.body&&typeof opt.body!=='string'){opt.headers['Content-Type']='application/json';opt.body=JSON.stringify(opt.body)}
-  const r=await fetch('/api'+path,opt);const t=await r.text();let d;try{d=JSON.parse(t)}catch{d=t}
+  const r=await fetch(API_BASE+'/api'+path,opt);const t=await r.text();let d;try{d=JSON.parse(t)}catch{d=t}
   if(!r.ok)throw new Error(typeof d==='string'?d:JSON.stringify(d));return d;
 }
 
@@ -484,10 +500,85 @@ function pageSystem(){
   const cfg=C.config||{};const sys=cfg.system||{};
   $('pageBody').innerHTML='<div class="stats"><div class="stat"><div class="k">平台</div><div class="v" style="font-size:17px">'+esc((sy.platform||'-')+' / '+(sy.arch||'-'))+'</div></div><div class="stat"><div class="k">CPU</div><div class="v">'+(sy.cpu_percent||0).toFixed(1)+'%</div></div><div class="stat"><div class="k">内存</div><div class="v">'+(sy.memory_percent||0).toFixed(1)+'%</div></div><div class="stat"><div class="k">网卡</div><div class="v">'+((sy.interfaces||[]).length)+'</div></div></div><div class="card"><div class="card-head"><div class="card-title">'+ico('settings')+'配置</div></div><div class="card-body"><pre>'+esc(JSON.stringify(sys,null,2))+'</pre><p class="help">系统设置可通过 <code>PUT /api/system</code> 修改；保存前会自动创建配置快照。</p></div></div>';
 }
-const PAGES_FN={overview:pageOverview,sites:pageSites,certs:pageCerts,acme:pageAcme,ddns:pageDdns,waf:pageWaf,jail:pageJail,tunnels:pageTunnels,stun:pageStun,history:pageHistory,import:pageImport,auth:pageAuth,portforward:pagePortForward,protoroute:pageProtoRoute,iplists:pageIpLists,siteusers:pageSiteUsers,notifications:pageNotifications,tasks:pageTasks,audit:pageLogs,stats:pageStats,topology:pageTopology,system:pageSystem};
+function pageDiag(){
+  $('pageDesc').textContent='Ping、路由追踪、端口探测、DNS 查询、测速与局域网扫描';
+  $('pageActions').innerHTML='';
+  $('pageBody').innerHTML='<div class="card"><div class="card-head"><div class="card-title">'+ico('log')+'网络诊断</div></div><div class="card-body">'
+    +'<div class="grid"><label>目标<div class="input" id="dgTarget">1.1.1.1</div></label>'
+    +'<label>端口<div class="input" id="dgPort">443</div></label>'
+    +'<label>域名<div class="input" id="dgDns">example.com</div></label>'
+    +'<label>网段<div class="input" id="dgCidr">192.168.1.0/24</div></label></div>'
+    +'<div class="ops"><button class="btn" onclick="diag(\'ping\')">Ping</button>'
+    +'<button class="btn" onclick="diag(\'traceroute\')">路由追踪</button>'
+    +'<button class="btn" onclick="diag(\'port\')">端口探测</button>'
+    +'<button class="btn" onclick="diag(\'dns\')">DNS 查询</button>'
+    +'<button class="btn" onclick="diag(\'speedtest\')">测速</button>'
+    +'<button class="btn" onclick="diag(\'scan\')">局域网扫描</button></div>'
+    +'<pre id="dgOut" class="mono" style="margin-top:12px;max-height:360px;overflow:auto"></pre></div></div>';
+}
+async function diag(kind){
+  const body={};
+  if(kind==='ping'||kind==='traceroute')body.target=$('dgTarget').value;
+  if(kind==='port'){body.target=$('dgTarget').value;body.port=parseInt($('dgPort').value)||443;}
+  if(kind==='dns'){body.name=$('dgDns').value;body.record='A';}
+  if(kind==='speedtest')body.url='';
+  if(kind==='scan'){body.cidr=$('dgCidr').value;body.ports=[22,80,443];}
+  const out=$('dgOut');out.textContent='执行中…';
+  try{const r=await api('/diag/'+kind,{method:'POST',body});out.textContent=JSON.stringify(r,null,2)}
+  catch(e){out.textContent='失败：'+e.message}
+}
+function pageKnock(){
+  $('pageDesc').textContent='单包敲门：AES-256-CFB 加密 + HMAC-SHA256 校验 + 时间窗防重放，成功后放行来源地址';
+  $('pageActions').innerHTML='<button class="btn primary" onclick="openForm(\'knockrule\')">'+ico('plus')+'新建规则</button>';
+  const rows=(C.knockRules||[]).map(r=>'<tr><td class="mono">'+esc(r.id)+'</td><td>'+esc(r.name)+'</td><td class="mono">'+esc((r.ports||[]).join(','))+'</td><td>'+((r.identities||[]).length)+' 个身份</td><td>'+(r.enabled?'<span class="tag green">启用</span>':'<span class="tag gray">停用</span>')+'</td><td>'+delBtn('/knock/rules/'+encodeURIComponent(r.id))+'</td></tr>');
+  $('pageBody').innerHTML='<div class="card"><div class="card-head"><div class="card-title">'+ico('shield')+'敲门规则</div><span class="card-desc">共 '+(C.knockRules||[]).length+' 条</span></div>'+table(['ID','名称','放行端口','身份','状态','操作'],rows,'暂无敲门规则')+'</div>'
+    +'<p class="help">客户端使用同一密钥对「时间戳 + nonce + 身份」加密并附加 HMAC-SHA256 前 16 字节后 base64 提交到 <code>POST /api/knock/{rule_id}</code>。</p>';
+}
+function pageDocker(){
+  $('pageDesc').textContent='容器、镜像与 Compose 管理，耗时操作在后台任务中执行并可中断';
+  $('pageActions').innerHTML='<button class="btn" onclick="refreshData()">'+ico('history')+'刷新</button>';
+  const rows=(C.dockerContainers||[]).map(c=>'<tr><td class="mono">'+esc((c.ID||c.Id||'').slice(0,12))+'</td><td>'+esc(c.Names||c.Name||'')+'</td><td class="mono">'+esc(c.Image||'')+'</td><td>'+esc(c.State||c.Status||'')+'</td><td class="mono">'+esc(c.Ports||'')+'</td><td><div class="ops">'
+    +runBtn('/docker/containers/'+encodeURIComponent((c.ID||c.Id||'').slice(0,12))+'/restart','重启')
+    +runBtn('/docker/containers/'+encodeURIComponent((c.ID||c.Id||'').slice(0,12))+'/stop','停止')
+    +runBtn('/docker/containers/'+encodeURIComponent((c.ID||c.Id||'').slice(0,12))+'/start','启动')+'</div></td></tr>');
+  $('pageBody').innerHTML='<div class="card"><div class="card-head"><div class="card-title">'+ico('settings')+'容器</div><span class="card-desc">共 '+(C.dockerContainers||[]).length+' 个</span></div>'+table(['ID','名称','镜像','状态','端口','操作'],rows,'未启用 Docker 模块或本机没有 Docker')+'</div>';
+}
+function pageTerminal(){
+  $('pageDesc').textContent='浏览器内 Shell、SSH 与 Telnet 会话，支持文件浏览与传输';
+  $('pageActions').innerHTML='<button class="btn primary" onclick="openForm(\'terminal\')">'+ico('plus')+'新建会话</button>';
+  const rows=(C.terminalSessions||[]).map(s=>'<tr><td class="mono">'+esc(s.id)+'</td><td><span class="tag">'+esc(s.kind)+'</span></td><td class="mono">'+esc(s.target||'-')+'</td><td>'+(s.active?'<span class="tag green">在线</span>':'<span class="tag gray">已断开</span>')+'</td><td>'+delBtn('/terminal/sessions/'+encodeURIComponent(s.id))+'</td></tr>');
+  $('pageBody').innerHTML='<div class="card"><div class="card-head"><div class="card-title">'+ico('tunnel')+'会话</div></div>'+table(['ID','类型','目标','状态','操作'],rows,'暂无终端会话')+'</div>'
+    +'<p class="help">终端通道为 WebSocket：<code>/api/terminal/ws/{id}</code>，文本帧即终端输入输出。</p>';
+}
+function pageFiles(){
+  $('pageDesc').textContent='WebDAV 与 FTP 文件服务，按用户授权根目录，可设为只读';
+  $('pageActions').innerHTML='<button class="btn" onclick="openForm(\'files\')">'+ico('settings')+'配置服务</button>';
+  const cfg=(C.config&&C.config.files)||{};
+  const wd=cfg.webdav||{},ftp=cfg.ftp||{};
+  const row=(name,svc)=>'<tr><td>'+name+'</td><td>'+(svc.enabled?'<span class="tag green">启用</span>':'<span class="tag gray">停用</span>')+'</td><td class="mono">'+esc(svc.listen||'-')+'</td><td>'+((svc.roots||[]).length)+' 个根目录</td><td>'+((svc.users||[]).length)+' 个用户</td><td>'+(svc.readonly?'只读':'可写')+'</td></tr>';
+  $('pageBody').innerHTML='<div class="card"><div class="card-head"><div class="card-title">'+ico('import')+'文件服务</div></div>'
+    +table(['服务','状态','监听','根目录','用户','权限'],[row('WebDAV',wd),row('FTP',ftp)],'未配置')+'</div>';
+}
+function pageUpdate(){
+  $('pageDesc').textContent='检查新版本与安全公告（匿名访问 GitHub，可在系统设置中关闭）';
+  $('pageActions').innerHTML='<button class="btn primary" onclick="api(\'/update/check\',{method:\'POST\'}).then(r=>{C.updateInfo=r;render()}).catch(e=>toast(e.message,\'err\'))">'+ico('history')+'检查更新</button>';
+  const u=C.updateInfo||{};
+  const adv=(u.advisories||[]).map(a=>'<li>'+esc(a)+'</li>').join('');
+  $('pageBody').innerHTML='<div class="stats"><div class="stat"><div class="k">当前版本</div><div class="v">'+esc(u.current||'-')+'</div></div>'
+    +'<div class="stat"><div class="k">最新版本</div><div class="v">'+esc(u.latest||'-')+'</div></div>'
+    +'<div class="stat"><div class="k">检查时间</div><div class="v" style="font-size:15px">'+esc(u.checked_at||'-')+'</div></div></div>'
+    +(u.error?'<div class="card"><div class="card-body"><span class="tag red">'+esc(u.error)+'</span></div></div>':'')
+    +(adv?'<div class="card"><div class="card-head"><div class="card-title">安全公告</div></div><div class="card-body"><ul>'+adv+'</ul></div></div>':'')
+    +(u.release_url?'<p class="help">下载地址：<a href="'+esc(u.release_url)+'" target="_blank">'+esc(u.release_url)+'</a></p>':'');
+}
+const PAGES_FN={overview:pageOverview,sites:pageSites,certs:pageCerts,acme:pageAcme,ddns:pageDdns,waf:pageWaf,jail:pageJail,tunnels:pageTunnels,stun:pageStun,history:pageHistory,import:pageImport,auth:pageAuth,portforward:pagePortForward,protoroute:pageProtoRoute,iplists:pageIpLists,siteusers:pageSiteUsers,notifications:pageNotifications,tasks:pageTasks,audit:pageLogs,stats:pageStats,topology:pageTopology,system:pageSystem,diag:pageDiag,knock:pageKnock,docker:pageDocker,terminal:pageTerminal,files:pageFiles,update:pageUpdate};
 function renderPage(){$('pageTitle').textContent=PAGES[current]||current;(PAGES_FN[current]||pageOverview)()}
 
 const FORMS={
+ knockrule:{title:'新建敲门规则',fields:[{k:'id',l:'规则 ID',req:1},{k:'name',l:'名称',req:1},{k:'aes_key',l:'AES 密钥（base64 32 字节）',req:1},{k:'hmac_key',l:'HMAC 密钥（base64 32 字节）',req:1},{k:'ports',l:'放行端口（逗号分隔）',ph:'22,80,443',req:1},{k:'identities',l:'允许身份（逗号分隔）'}],submit:v=>api('/knock/rules',{method:'POST',body:{id:v.id,name:v.name,aes_key:v.aes_key,hmac_key:v.hmac_key,ports:split(v.ports).map(Number),identities:split(v.identities),enabled:true,single_address:false}})},
+ terminal:{title:'新建终端会话',fields:[{k:'kind',l:'类型',t:'select',opts:['local','ssh','telnet']},{k:'host',l:'主机'},{k:'port',l:'端口',t:'number'},{k:'user',l:'用户名'},{k:'args',l:'附加参数'}],submit:v=>api('/terminal/sessions',{method:'POST',body:{kind:v.kind,host:v.host,port:+v.port||0,user:v.user,args:split(v.args)}})},
+ files:{title:'配置文件服务',fields:[{k:'dav_enabled',l:'启用 WebDAV',t:'checkbox'},{k:'dav_listen',l:'WebDAV 监听',ph:'0.0.0.0:19080'},{k:'ftp_enabled',l:'启用 FTP',t:'checkbox'},{k:'ftp_listen',l:'FTP 监听',ph:'0.0.0.0:21'},{k:'readonly',l:'全局只读',t:'checkbox'}],fill:cfg=>({dav_enabled:cfg.files&&cfg.files.webdav?cfg.files.webdav.enabled:false,dav_listen:cfg.files&&cfg.files.webdav?cfg.files.webdav.listen:'',ftp_enabled:cfg.files&&cfg.files.ftp?cfg.files.ftp.enabled:false,ftp_listen:cfg.files&&cfg.files.ftp?cfg.files.ftp.listen:'',readonly:cfg.files&&cfg.files.ftp?cfg.files.ftp.readonly:false}),submit:v=>api('/modules/files',{method:'PUT',body:{webdav:{enabled:!!v.dav_enabled,listen:v.dav_listen},ftp:{enabled:!!v.ftp_enabled,listen:v.ftp_listen,readonly:!!v.readonly}}})},
+
  site:{title:'新建 Web 站点',fields:[{k:'domains',l:'域名（逗号分隔）',ph:'a.example.com, b.example.com',req:1},{k:'backend',l:'后端地址',ph:'http://127.0.0.1:3000'},{k:'kind',l:'站点类型',t:'select',opts:['proxy','redirect','static','text','disconnect','nav']},{k:'listener',l:'监听器 ID',ph:'留空使用默认'}],submit:v=>api('/sites',{method:'POST',body:{domains:split(v.domains),backend:v.backend,kind:v.kind,listener:v.listener||null}})},
  cert:{title:'添加静态证书',fields:[{k:'id',l:'证书 ID',req:1},{k:'cert_path',l:'证书 PEM 路径',req:1},{k:'key_path',l:'私钥 PEM 路径',req:1}],submit:v=>api('/certs',{method:'POST',body:v})},
  acme:{title:'新建 ACME 任务',fields:[{k:'id',l:'任务 ID',req:1},{k:'domains',l:'域名（逗号分隔）',req:1},{k:'email',l:'联系邮箱',req:1},{k:'challenge',l:'挑战类型',t:'select',opts:['http-01','dns-01']},{k:'dns_provider',l:'DNS 服务商',t:'select',opts:['','cloudflare','hook','manual']},{k:'dns_zone',l:'DNS 区域 / Zone ID'},{k:'cert_id',l:'证书 ID',req:1}],submit:v=>api('/acme',{method:'POST',body:{id:v.id,domains:split(v.domains),email:v.email,provider:'letsencrypt',directory:'',challenge:v.challenge,dns_provider:v.dns_provider,dns_zone:v.dns_zone,dns_credentials:{},cert_id:v.cert_id,auto_renew:true,renew_before_days:30}})},
@@ -551,8 +642,8 @@ async function refreshData(){
       api('/sites'),api('/certs'),api('/ddns'),api('/acme'),api('/waf/rules'),api('/waf/profiles'),
       api('/tunnels'),api('/stun'),api('/history'),api('/jail/bans'),api('/port-forwards'),api('/proto-routes'),
       api('/port-forwards/status'),api('/proto-routes/status'),api('/notifications/channels'),api('/notifications/rules'),
-      api('/tasks'),api('/tasks/status'),api('/ip-lists'),api('/site-users'),api('/audit'),api('/system'),api('/metrics'),api('/topology')]);
-    Object.assign(C,{sites,certs,ddns,acme,waf,profiles,tunnels,stun,history,bans,forwards,routes,forwardStatus,routeStatus,channels,rules,tasks,taskStatus,iplists,siteusers,audit,system,stats,topology});
+      api('/tasks'),api('/tasks/status'),api('/ip-lists'),api('/site-users'),api('/audit'),api('/system'),api('/metrics'),api('/topology'),api('/knock/rules').catch(()=>[]),api('/docker/containers').catch(()=>[]),api('/terminal/sessions').catch(()=>[]),api('/update/info').catch(()=>null),api('/visitor-audit').catch(()=>null)]);
+    Object.assign(C,{sites,certs,ddns,acme,waf,profiles,tunnels,stun,history,bans,forwards,routes,forwardStatus,routeStatus,channels,rules,tasks,taskStatus,iplists,siteusers,audit,system,stats,topology,knockRules,dockerContainers,terminalSessions,updateInfo,visitorAudit});
     try{C.config=await api('/config')}catch{}
     $('app').style.display='block';$('login').classList.add('hide');
     $('sideVer').textContent='v'+(s.version||'0.2.0');
@@ -593,6 +684,38 @@ if(p.get('oidc_code'))fetch('/api/login/oidc/token',{method:'POST',headers:{'Con
 window.addEventListener('hashchange',()=>{const id=location.hash.slice(1);if(id&&PAGES[id]&&id!==current)go(id)});
 const bootId=location.hash.slice(1);if(PAGES[bootId]&&!NAV.flatMap(g=>g.items).find(i=>i.id===bootId&&i.todo))current=bootId;
 go(current);if(token)refreshData();else showLogin();
+</script>
+<script>
+(function(){
+  const overlay=$('gsearch'),input=$('gsearchInput'),results=$('gsearchResults');
+  function sources(){
+    const out=[];
+    (C.sites||[]).forEach(x=>(x.domains||[]).forEach(d=>out.push({page:'sites',label:'站点 '+d,detail:x.backend||''})));
+    (C.forwards||[]).forEach(x=>out.push({page:'portforward',label:'转发 '+x.name,detail:x.listen+' → '+(x.targets||[]).join(',')}));
+    (C.routes||[]).forEach(x=>out.push({page:'protoroute',label:'分流 '+x.name,detail:x.listen}));
+    (C.ddns||[]).forEach(x=>out.push({page:'ddns',label:'DDNS '+x.name,detail:x.provider}));
+    (C.certs||[]).forEach(x=>out.push({page:'certs',label:'证书 '+x.id,detail:x.cert_path||''}));
+    (C.tasks||[]).forEach(x=>out.push({page:'tasks',label:'任务 '+x.name,detail:x.cron}));
+    (C.iplists||[]).forEach(x=>out.push({page:'iplists',label:'IP 列表 '+x.name,detail:x.url||x.file||''}));
+    (C.siteusers||[]).forEach(x=>out.push({page:'siteusers',label:'用户 '+x.username,detail:x.email||''}));
+    return out;
+  }
+  function render(){
+    const q=input.value.trim().toLowerCase();
+    const list=sources().filter(x=>!q||(x.label+' '+x.detail).toLowerCase().includes(q)).slice(0,40);
+    results.innerHTML=list.map(x=>'<div class="gsearch-item" onclick="go(\'+x.page+\');closeGS()"><span>'+esc(x.label)+'</span><span class="mini muted">'+esc(x.detail||'')+'</span></div>').join('')||'<div class="gsearch-item mini muted">无匹配结果</div>';
+  }
+  function open(){overlay.classList.remove('hide');input.value='';render();input.focus();}
+  function close(){overlay.classList.add('hide');}
+  window.closeGS=close;
+  document.addEventListener('keydown',e=>{
+    if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='k'){e.preventDefault();overlay.classList.contains('hide')?open():close();}
+    if(e.key==='Escape')close();
+  });
+  overlay.addEventListener('click',e=>{if(e.target===overlay)close();});
+  input.addEventListener('input',render);
+  window.openGlobalSearch=open;
+})();
 </script>
 </body>
 </html>

@@ -192,6 +192,7 @@ pub async fn issue(state: &AppState, task_id: &str) -> Result<String, String> {
         if !config.certificates.iter().any(|c| c.id == task.cert_id) {
             config.certificates.push(CertificateConfig {
                 id: task.cert_id.clone(),
+                enabled: true,
                 cert_path: paths.0.to_string_lossy().to_string(),
                 key_path: paths.1.to_string_lossy().to_string(),
                 acme_id: Some(task.id.clone()),

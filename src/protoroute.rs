@@ -147,7 +147,25 @@ fn proxy_header(proto: &str, client: SocketAddr, target: SocketAddr) -> Vec<u8> 
 
 async fn source_allowed(state: &AppState, task: &ProtoRouteTask, ip: &str) -> bool {
     if task.source_deny.iter().any(|p| waf::ip_match(p, ip)) { return false; }
-    if !task.source_allow.is_empty() && !task.source_allow.iter().any(|p| waf::ip_match(p, ip)) { return false; }
+    let deny_lists = {
+        let cfg = state.config.read().await;
+        task.source_deny.iter().any(|pattern| {
+            cfg.ip_lists.iter().find(|l| &l.id == pattern)
+                .is_some_and(|l| l.entries.iter().any(|e| waf::ip_match(e, ip)))
+        })
+    };
+    if deny_lists { return false; }
+    if !task.source_allow.is_empty() && !task.source_allow.iter().any(|p| waf::ip_match(p, ip)) {
+        // 允许列表也可以引用 IP 列表 ID。
+        let allowed_by_list = {
+            let cfg = state.config.read().await;
+            task.source_allow.iter().any(|pattern| {
+                cfg.ip_lists.iter().find(|l| &l.id == pattern)
+                    .is_some_and(|l| l.entries.iter().any(|e| waf::ip_match(e, ip)))
+            })
+        };
+        if !allowed_by_list { return false; }
+    }
     if let Some(grant) = state.knock_grants.read().await.values().find(|g| g.ip == ip && g.until > Utc::now()) {
         let _ = grant;
     }

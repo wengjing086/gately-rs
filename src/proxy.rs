@@ -142,25 +142,27 @@ pub async fn proxy_handler(
     for (name, value) in parts.headers.iter() {
         if let Ok(v) = value.to_str() { headers.insert(name.as_str().to_ascii_lowercase(), v.to_string()); }
     }
-    let logged_in = site_ext::site_user(&state, &site, &parts.headers).await.is_some();
-    let decision = waf::evaluate(&state.config.read().await.clone(), &site, &path, &query, &headers, &String::from_utf8_lossy(&bytes), logged_in, Some(&state)).await;
+    let logged_in = site_ext::site_user(&state, &site, &parts.headers).await;
+    let decision = waf::evaluate(&state.config.read().await.clone(), &site, &path, &query, &headers, &String::from_utf8_lossy(&bytes), logged_in.is_some(), Some(&state)).await;
     match decision {
         waf::Decision::Deny(msg) => {
             waf::record_failure(&state, 5, 300, 3600, &ip, "waf block").await;
-            return site_ext::error_response(StatusCode::FORBIDDEN, &site.error_page, &msg);
+            metrics::record_visitor(&state, &ip, &site.id, &path, logged_in.as_deref(), true).await;
+            return site_ext::error_response_with_style(StatusCode::FORBIDDEN, &site.error_page, &site.error_page_style, &msg);
         }
         waf::Decision::Log(msg) => eprintln!("[waf] {msg}"),
         waf::Decision::Allow => {}
     }
 
-    let target = site_ext::resolve(&state, &site, &path, if query.is_empty() { None } else { Some(&query) });
+    let target = site_ext::resolve(&state, &site, &path, if query.is_empty() { None } else { Some(&query) }, logged_in.as_deref());
     let url = match target {
         site_ext::Resolved::Response(resp) => return resp,
         site_ext::Resolved::Proxy { backend, .. } => backend,
     };
 
     let cache_key = site_ext::build_cache_key(&host, &format!("{path}?{query}"));
-    if site.cache_ttl_secs > 0 {
+    let cache_ttl = site_ext::cache_ttl(&site, &path);
+    if let Some(ttl) = cache_ttl {
         if let Some((status, cached_headers, cached_body)) = site_ext::cache_get(&state, &cache_key).await {
             let mut builder = Response::builder().status(status);
             for (name, value) in cached_headers {
@@ -203,10 +205,26 @@ pub async fn proxy_handler(
     };
     let elapsed = started.elapsed();
     metrics::record_request(&state, &site.id, &ip, &path, status.as_u16(), bytes.len() as u64, body.len() as u64, &site_ext::country_from(&parts.headers)).await;
+    metrics::record_visitor(&state, &ip, &site.id, &path, logged_in.as_deref(), false).await;
     let _ = elapsed;
     if status == StatusCode::NOT_FOUND && !ip.is_empty() { waf::record_404(&state, &ip).await; }
-    if site.cache_ttl_secs > 0 && status.is_success() {
-        site_ext::cache_put(&state, &cache_key, site.cache_ttl_secs, status.as_u16(), response_headers, body.to_vec()).await;
+    let compressible = body.len() > 512
+        && site_ext::wants_gzip(&parts.headers)
+        && response_headers.iter().any(|(name, value)| {
+            name.eq_ignore_ascii_case("content-type")
+                && (value.contains("text/") || value.contains("json") || value.contains("javascript") || value.contains("svg"))
+        });
+    let raw_body = body.to_vec();
+    let (body, extra_headers) = if compressible {
+        (Body::from(site_ext::gzip_bytes(&body)), vec![("content-encoding".to_string(), "gzip".to_string())])
+    } else { (Body::from(body), Vec::new()) };
+    for (name, value) in extra_headers {
+        if let Ok(n) = HeaderName::from_str(&name) { builder = builder.header(n, value); }
+    }
+    if let Some(ttl) = cache_ttl {
+        if status.is_success() {
+            site_ext::cache_put(&state, &cache_key, ttl, status.as_u16(), response_headers, raw_body.clone()).await;
+        }
     }
     builder.body(Body::from(body)).unwrap_or_else(|err| (StatusCode::INTERNAL_SERVER_ERROR, err.to_string()).into_response())
 }

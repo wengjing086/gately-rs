@@ -117,6 +117,41 @@ pub struct KnockGrant {
     pub until: DateTime<Utc>,
 }
 
+#[derive(Clone, Debug, Serialize)]
+pub struct JobStatus {
+    pub id: String,
+    pub kind: String,
+    pub target: String,
+    pub status: String,
+    pub output: String,
+    pub exit_code: Option<i32>,
+    pub started_at: DateTime<Utc>,
+    pub finished_at: Option<DateTime<Utc>>,
+    pub cancelled: bool,
+}
+
+#[derive(Clone, Debug, Default, Serialize)]
+pub struct VisitorAudit {
+    pub ip: String,
+    pub sites: HashMap<String, u64>,
+    pub paths: HashMap<String, u64>,
+    pub identities: HashMap<String, u64>,
+    pub blocked: u64,
+    pub first_seen: DateTime<Utc>,
+    pub last_seen: DateTime<Utc>,
+}
+
+#[derive(Clone, Debug, Serialize)]
+pub struct UpdateInfo {
+    pub current: String,
+    pub latest: String,
+    pub release_url: String,
+    pub published_at: Option<String>,
+    pub checked_at: DateTime<Utc>,
+    pub advisories: Vec<String>,
+    pub error: Option<String>,
+}
+
 #[derive(Clone)]
 pub struct AppState {
     pub config_path: PathBuf,
@@ -144,6 +179,11 @@ pub struct AppState {
     pub login_failures: Arc<RwLock<HashMap<String, (u32, DateTime<Utc>)>>>,
     pub rate_limits: Arc<RwLock<HashMap<String, (u32, DateTime<Utc>)>>>,
     pub site_cache: Arc<RwLock<HashMap<String, (DateTime<Utc>, u16, Vec<(String, String)>, Vec<u8>)>>>,
+    /// Background jobs (docker pull/build, backups, upgrades).
+    pub jobs: Arc<RwLock<HashMap<String, JobStatus>>>,
+    /// Per-visitor audit entries keyed by client address.
+    pub visitor_audit: Arc<RwLock<HashMap<String, VisitorAudit>>>,
+    pub update_info: Arc<RwLock<Option<UpdateInfo>>>,
     pub client: reqwest::Client,
 }
 
@@ -174,6 +214,9 @@ impl AppState {
             login_failures: Arc::new(RwLock::new(HashMap::new())),
             rate_limits: Arc::new(RwLock::new(HashMap::new())),
             site_cache: Arc::new(RwLock::new(HashMap::new())),
+            jobs: Arc::new(RwLock::new(HashMap::new())),
+            visitor_audit: Arc::new(RwLock::new(HashMap::new())),
+            update_info: Arc::new(RwLock::new(None)),
             client: reqwest::Client::builder()
                 .user_agent(concat!("gately-rs/", env!("CARGO_PKG_VERSION")))
                 .build()

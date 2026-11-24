@@ -62,12 +62,34 @@ fn target_value(target: &str, path: &str, query: &str, headers: &HashMap<String,
 
 fn builtin_rules() -> Vec<(&'static str, &'static str, &'static str)> {
     vec![
-        ("CRS-921-path-traversal", "(?:\\.\\./|%2e%2e%2f|\\.\\.\\\\)", "path"),
-        ("CRS-930-xss", "(?i)<script|javascript:|onerror\\s*=", "all"),
-        ("CRS-942-sqli", "(?i)(union\\s+select|or\\s+1\\s*=\\s*1|sleep\\s*\\(|benchmark\\s*\\()", "all"),
-        ("CRS-932-rce", "(?:;|\\|)\\s*(?:cat|wget|curl|bash|sh)\\b", "all"),
-        ("CRS-913-scanner", "(?i)(sqlmap|nikto|acunetix|masscan|nmap|gobuster)", "user_agent"),
-        ("CRS-922-sensitive-file", "(?i)/\\.(env|git|svn|htaccess|ssh|aws)", "path"),
+        // 路径与文件类（CRS 92x）
+        ("CRS-920-path-traversal", "(?:\\.\\./|%2e%2e%2f|\\.\\.\\\\|%252e%252e)", "path"),
+        ("CRS-921-protocol-attack", "(?i)(file://|gopher://|dict://|expect://)", "all"),
+        ("CRS-922-sensitive-file", "(?i)/\\.(env|git|svn|htaccess|htpasswd|ssh|aws|bak|old|sql|log)(/|$|\\?)", "path"),
+        ("CRS-923-remote-file", "(?i)(php://|phar://|zip://|data:text/plain;base64)", "all"),
+        // 注入类（CRS 93x）
+        ("CRS-930-xss", "(?i)<script|javascript:|onerror\\s*=|onload\\s*=|document\\.cookie", "all"),
+        ("CRS-931-rxss", "(?i)style\\s*=\\s*[\"']?expression\\(|<img[^>]+onerror", "all"),
+        ("CRS-932-rce", "(?i)(?:;|\\||\\||&&)\\s*(?:cat|wget|curl|bash|sh|powershell|cmd)\\b", "all"),
+        ("CRS-933-sqli", "(?i)(union\\s+select|or\\s+1\\s*=\\s*1|sleep\\s*\\(|benchmark\\s*\\(|information_schema)", "all"),
+        ("CRS-934-nodejs", "(?i)(require\\s*\\(|process\\.env|__proto__|constructor\\s*\\[)", "all"),
+        ("CRS-935-php-injection", "(?i)(php\\s*\\$_|base64_decode\\s*\\(|eval\\s*\\()", "all"),
+        ("CRS-937-ssrf", "(?i)(169\\.254\\.169\\.254|metadata\\.google\\.internal|/latest/meta-data)", "all"),
+        ("CRS-938-java", "(?i)(class\\.load|jndi:|ognl\\.|struts2|\\.action\\b)", "all"),
+        // 协议与请求类（CRS 94x）
+        ("CRS-940-crlf", "(?i)%0d%0a|\\\\r\\\\n", "all"),
+        ("CRS-941-xtype", "(?i)content-type\\s*:\\s*[^\\r\\n]*multipart", "header"),
+        ("CRS-942-sqli-time", "(?i)(pg_sleep|dbms_pipe\\.receive_message|waitfor\\s+delay)", "all"),
+        ("CRS-943-multitenant", "(?i)(insert\\s+into|update\\s+\\w+\\s+set)", "body"),
+        // 扫描器与爬虫（CRS 91x）
+        ("CRS-913-scanner", "(?i)(sqlmap|nikto|acunetix|masscan|nmap|gobuster|dirbuster|wpscan)", "user_agent"),
+        ("CRS-911-scanner", "(?i)(nessus|openvas|qualys|burp\\s?suite|zgrab)", "user_agent"),
+        ("CRS-920-bots", "(?i)(semrush|ahrefs|mj12bot|dotbot|petalbot)", "user_agent"),
+        // 敏感信息
+        ("CRS-950-leak", "(?i)(-----BEGIN (RSA|OPENSSH|EC) PRIVATE KEY-----|AKIA[0-9A-Z]{16})", "body"),
+        // 自定义内置加固项
+        ("GATELY-001-method", "(?i)^(TRACE|TRACK)$", "header"),
+        ("GATELY-002-admin-path", "(?i)/\\.(git|svn|env)(/|$)", "path"),
     ]
 }
 
