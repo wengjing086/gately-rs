@@ -1,0 +1,1 @@
+import{n as e}from"./api-nLhT174B.js";var t=`********`;async function n(t,n){return(await e.get(t))?.[n]}function r(e,t){if(e)return()=>n(e,t)}export{n,r,t};

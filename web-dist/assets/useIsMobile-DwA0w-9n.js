@@ -1,0 +1,1 @@
+import{_ as e,pt as t}from"./vue-CWX22aXd.js";var n=`(max-width: 767.98px)`,r=t(!1),i=!1;function a(){if(i||typeof window>`u`)return;i=!0;let e=window.matchMedia(n);r.value=e.matches,e.addEventListener(`change`,e=>{r.value=e.matches})}function o(){return a(),r}function s(){let t=o();return{isMobile:t,labelPosition:e(()=>t.value?`top`:`right`)}}export{o as n,s as t};

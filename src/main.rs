@@ -1,3 +1,5 @@
+#![recursion_limit = "256"]
+
 mod acme;
 mod admin;
 mod auth_ext;
@@ -24,6 +26,7 @@ mod stun;
 mod terminal;
 mod tunnel;
 mod update;
+mod upstream;
 mod waf;
 
 use axum::Extension;

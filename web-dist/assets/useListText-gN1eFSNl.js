@@ -1,0 +1,3 @@
+import{_ as e,_t as t,nt as n,pt as r}from"./vue-CWX22aXd.js";var i=e=>e.split(`
+`).map(e=>e.trim()).filter(Boolean),a=e=>e.split(/[\n,]/).map(e=>e.trim()).filter(Boolean),o=e=>e.split(/[,\s]+/).filter(Boolean),s=(e,t)=>e.length===t.length&&e.every((e,n)=>e===t[n]);function c(i,a,o){let{split:c,separator:l=`
+`}=o,u=r(``),d;return n(i,e=>{let n=e??[];t(e??void 0)===d&&s(c(u.value),n)||(d=void 0,u.value=n.join(l))},{immediate:!0,deep:!0}),e({get:()=>u.value,set:e=>{u.value=e;let t=c(e);d=t,a(t)}})}export{c as i,i as n,a as r,o as t};

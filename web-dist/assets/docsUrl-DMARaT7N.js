@@ -1,0 +1,1 @@
+function e(e,t){let n=t.startsWith(`/`)?t:`/${t}`;return e===`zh-CN`?`https://gately.cn${n}`:`https://gately.cn/${e}${n}`}export{e as t};

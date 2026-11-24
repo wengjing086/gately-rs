@@ -1,0 +1,2 @@
+import{E as e,J as t,St as n,W as r,ct as i,y as a}from"./vue-CWX22aXd.js";import{i as o,n as s}from"./useListText-gN1eFSNl.js";var c=e({__name:`ListInput`,props:{modelValue:{default:void 0},split:{type:Function,default:s},separator:{default:`
+`}},emits:[`update:modelValue`],setup(e,{emit:s}){let c=e,l=s,u=o(()=>c.modelValue,e=>l(`update:modelValue`,e),{split:c.split,separator:c.separator});return(e,o)=>{let s=t(`el-input`);return r(),a(s,{modelValue:n(u),"onUpdate:modelValue":o[0]||=e=>i(u)?u.value=e:null},null,8,[`modelValue`])}}});export{c as t};

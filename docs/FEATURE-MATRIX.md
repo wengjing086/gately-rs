@@ -1,9 +1,18 @@
 # 原版 Gately → gately-rs 功能对照矩阵
 
 对照对象：[wangwanjie/gately](https://github.com/wangwanjie/gately)（Apache-2.0，Go 实现）
-本项目状态：v0.6.0（Rust 独立重实现）
+本项目状态：v0.7.0（Rust 独立重实现 + 复用上游网页管理端）
 
 图例：✅ 已实现 ｜ 🟡 部分实现（与原版有差距，已在备注写明）｜ ❌ 未实现
+
+---
+
+## 0. v0.7.0 网页管理端复用
+
+- 上游 `web/` 前端已构建为静态产物并嵌进 Rust 二进制，入口为 `/gately`（`/`、`/ui` 自动跳转），旧 UI 在 `/ui-legacy`。
+- 兼容层位于 `src/upstream.rs`：登录 Cookie `gately_token`、上游风格 JSON（含 `key/enable/state/stats` 等视图字段）、通用 CRUD / 启停 / 复制，写回同一份 `gately.json`。
+- 回归结果：上游前端出现的 150 个 API 路径中，148 个 GET 正常返回 JSON，`/api/login`、`/api/logout` 仅接受 POST；无头浏览器验证概览、DDNS、Web 站点页面均能挂载渲染。
+- 运行态统计、frp/cloudflared/tailscale/netbird/easytier 专属控制面、Passkey、Coraza 控制台等仍不等价于上游 Go 后端，见各功能行备注。
 
 ---
 
@@ -13,7 +22,7 @@
 |---|---|---|
 | 单二进制完成反代 / 证书 / DDNS / 穿透 / WAF / 封禁 | ✅ | gately-rs 同为单二进制 + 内嵌后台 |
 | 明文 JSON 配置、可入 Git | ✅ | 额外支持每次改动自动快照 |
-| 浏览器内完成全部配置 | ✅ | 内嵌单页 UI，已按原版风格重做 |
+| 浏览器内完成全部配置 | ✅ | v0.7.0 起直接内嵌原版 Vue 网页端，经兼容 API 读写配置；旧精简 UI 保留在 /ui-legacy |
 | 无遥测 / 默认不外连 | ✅ | 仅 IP 查询、STUN、更新检查外连，均可在配置关闭 |
 | 可选模块编译 | 🟡 | 本项目以运行时开关（`system.disabled_modules`）替代按需编译 |
 | cosign 签名 / SBOM / provenance | ❌ | 本项目仅提供 `checksums.sha256` |

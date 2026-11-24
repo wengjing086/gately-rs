@@ -165,6 +165,13 @@ pub async fn client_ip(state: &AppState, req: &Request) -> String {
 
 async fn ui() -> Html<&'static str> { Html(include_str!("ui.html")) }
 
+/// Default entry point now serves the upstream Gately web UI under `/gately`.
+async fn upstream_home(State(state): State<AppState>) -> Response {
+    let prefix = state.config.read().await.admin.secure_path.clone();
+    let prefix = if prefix.is_empty() { String::new() } else if prefix.starts_with('/') { prefix } else { format!("/{prefix}") };
+    axum::response::Redirect::temporary(&format!("{prefix}/gately")).into_response()
+}
+
 async fn openapi() -> Response {
     Json(json!({
         "openapi": "3.0.3",
@@ -782,9 +789,11 @@ pub async fn admin_router(state: AppState) -> Router {
 
     let api = public.merge(protected);
     let app = Router::new()
-        .route("/", get(ui))
-        .route("/ui", get(ui))
+        .route("/", get(upstream_home))
+        .route("/ui", get(upstream_home))
+        .route("/ui-legacy", get(ui))
         .nest("/api", api);
+    let app = crate::upstream::mount(app, &state);
 
     // Secret entry path: the whole admin surface lives under the configured prefix.
     let prefix = state.config.read().await.admin.secure_path.clone();

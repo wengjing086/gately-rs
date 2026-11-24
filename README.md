@@ -2,13 +2,13 @@
 
 用 Rust 编写的边缘网关，借鉴 [Gately](https://github.com/wangwanjie/gately) 的功能设计，是一个**独立的重新实现**。
 
-> 非官方项目，与上游 Gately 无隶属关系。v0.6.0 在 v0.4.0/v0.5.0 基础上补齐后台的可操作性：所有列表支持全字段编辑、启停、复制、批量操作与搜索，Docker / 终端 / 设置 / SSL / 入侵防护等页面增加了真实交互面板，并按上游复刻了导航分组与页面位置。逐条功能对照见 [`docs/FEATURE-MATRIX.md`](docs/FEATURE-MATRIX.md)。仍是**功能对齐版**，不建议无防护地直接暴露到公网。
+> 非官方项目，与上游 Gately 无隶属关系。v0.7.0 直接复用上游 Gately 的 Vue 网页管理端（随二进制内嵌），通过兼容 API 层读写 gately-rs 配置；旧的精简后台仍保留在 `/ui-legacy`。逐条功能对照见 [`docs/FEATURE-MATRIX.md`](docs/FEATURE-MATRIX.md)。仍是**功能对齐版**，不建议无防护地直接暴露到公网。
 
 ## 已实现功能
 
 ### 核心
 - **配置**：明文 JSON，首次启动自动生成；每次修改前自动快照，支持 diff、查看历史与一键回滚；支持整份配置导入/导出。
-- **管理后台**：内嵌单页 Web UI + 登录鉴权 + REST API + OpenAPI（`GET /api/openapi.json`）+ 多 API Token（按模块作用域 / 只读）。
+- **管理后台**：默认使用上游 Gately 的 Vue 网页管理端（内嵌在 `/gately`，`/` 与 `/ui` 自动跳转），Cookie 会话登录；同时保留 REST API、OpenAPI（`GET /api/openapi.json`）与多 API Token。旧的精简后台位于 `/ui-legacy`。
 - **反向代理**：按 Host 精确匹配（支持 `*`），可绑定监听器；WebSocket 透传、路径规则、后端权重/备用、错误页拦截、按路径缓存规则、限流、gzip 压缩、用户 Header 注入、**按登录用户分流后端**（等价 nginx `map $remote_user`）。
 - **站点类型**：反向代理、重定向、静态文件、固定文本、断开连接、导航面板。
 - **TLS**：rustls 加载静态 PEM；HTTP 与 HTTPS 可共用一个监听器，可附加纯 HTTP 端口；管理界面可单独启用 HTTPS。
@@ -52,6 +52,15 @@
 - 封禁后端需要系统权限；无权限时仍保留内存封禁表。
 - 配置中明文保存 API Token、TOTP secret 与 OIDC client secret，请设置文件权限（建议 `0600`）。
 
+## 上游网页端兼容边界
+
+`/gately` 提供的是上游 Gately 前端原版页面（Apache-2.0），由 `src/upstream.rs` 提供等价 API：
+
+- 配置类页面（Web 站点/监听器、证书、DDNS、WAF、通知、计划任务、端口转发、协议分流、STUN、敲门、存储、WOL、Docker 设置等）可列表、新增、编辑、启停、删除，改动写回同一个 `gately.json`。
+- 上游的 `XxxView` 运行态字段（`state`、`stats`、`running`、`error` 等）以安全默认值提供，**不等同于上游 Go 后端采集到的实时统计**。
+- `frp` / `cloudflared` / `tailscale` / `netbird` / `easytier` 页面可展示，但其专属控制面字段被映射到本项目的通用隧道配置；Passkey、Coraza CRS 控制台、完整 Docker/终端协议仍以本项目已有实现为准。
+- 兼容层覆盖了上游前端 148 个可 GET 的管理接口，均返回 JSON；写操作按资源映射到现有配置结构，字段差异在 `src/upstream.rs` 中集中转换。
+
 ## 预编译二进制
 
 Releases 页面提供三个平台的产物，均带 `.sha256` 校验文件：
@@ -69,7 +78,9 @@ cargo build --release
 ./target/release/gately-rs ./gately.json
 ```
 
-- 管理后台：<http://127.0.0.1:16680/>
+- 管理后台（上游网页端）：<http://127.0.0.1:16680/gately>（`/` 与 `/ui` 自动跳转）
+- 旧版精简后台：<http://127.0.0.1:16680/ui-legacy>
+- 已有 API Token 时可用 <http://127.0.0.1:16680/gately/set-cookie?token=你的令牌> 直接安装会话 Cookie
 - 默认密码：`gately.cn`
 - 默认 token：`dev-token-change-me`
 - 默认代理监听：`0.0.0.0:18080`
