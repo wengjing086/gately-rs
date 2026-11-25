@@ -169,7 +169,10 @@ async fn ui() -> Html<&'static str> { Html(include_str!("ui.html")) }
 async fn upstream_home(State(state): State<AppState>) -> Response {
     let prefix = state.config.read().await.admin.secure_path.clone();
     let prefix = if prefix.is_empty() { String::new() } else if prefix.starts_with('/') { prefix } else { format!("/{prefix}") };
-    axum::response::Redirect::temporary(&format!("{prefix}/gately")).into_response()
+    // The upstream build references assets with relative paths ("./assets/..."),
+    // so the browser must land on the trailing-slash URL or every JS/CSS request
+    // resolves against the server root and the page stays blank.
+    axum::response::Redirect::temporary(&format!("{prefix}/gately/")).into_response()
 }
 
 async fn openapi() -> Response {

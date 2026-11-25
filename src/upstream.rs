@@ -1083,7 +1083,37 @@ pub async fn index_html() -> Response {
         .unwrap()
 }
 
+/// The Vue build links its assets relatively (`./assets/index-*.js`). When the
+/// page is opened at `/gately` (no trailing slash), the browser resolves those
+/// URLs to `/assets/...`, which 404s and leaves an empty `#app`. Redirect every
+/// such entry to `/gately/` so relative paths resolve inside the mount point.
+async fn trailing_slash(req: Request<Body>, next: Next) -> Response {
+    // Use OriginalUri so a configured admin.secure_path prefix is preserved.
+    let path = req.extensions()
+        .get::<axum::extract::OriginalUri>()
+        .map(|u| u.0.path().to_string())
+        .unwrap_or_else(|| req.uri().path().to_string());
+    let location = if path == BASE {
+        Some(format!("{path}/"))
+    } else {
+        path.strip_suffix("/index.html").map(|p| format!("{p}/"))
+    };
+    if let Some(mut location) = location {
+        if let Some(query) = req.uri().query() {
+            location.push('?');
+            location.push_str(query);
+        }
+        return Response::builder()
+            .status(StatusCode::TEMPORARY_REDIRECT)
+            .header("location", location)
+            .body(Body::empty())
+            .unwrap();
+    }
+    next.run(req).await
+}
+
 pub fn mount(app: Router<AppState>, state: &AppState) -> Router<AppState> {
     app.route("/gately/", get(index_html))
         .nest(BASE, router(state.clone()))
+        .layer(middleware::from_fn(trailing_slash))
 }

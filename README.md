@@ -2,7 +2,7 @@
 
 用 Rust 编写的边缘网关，借鉴 [Gately](https://github.com/wangwanjie/gately) 的功能设计，是一个**独立的重新实现**。
 
-> 非官方项目，与上游 Gately 无隶属关系。v0.7.0 直接复用上游 Gately 的 Vue 网页管理端（随二进制内嵌），通过兼容 API 层读写 gately-rs 配置；旧的精简后台仍保留在 `/ui-legacy`。逐条功能对照见 [`docs/FEATURE-MATRIX.md`](docs/FEATURE-MATRIX.md)。仍是**功能对齐版**，不建议无防护地直接暴露到公网。
+> 非官方项目，与上游 Gately 无隶属关系。v0.7.1 直接复用上游 Gately 的 Vue 网页管理端（随二进制内嵌），通过兼容 API 层读写 gately-rs 配置；旧的精简后台仍保留在 `/ui-legacy`。v0.7.1 修复了直接访问 `/gately`（无尾斜杠）时前端资源 404 导致页面空白的问题，所有入口现在统一跳转到 `/gately/`。逐条功能对照见 [`docs/FEATURE-MATRIX.md`](docs/FEATURE-MATRIX.md)。仍是**功能对齐版**，不建议无防护地直接暴露到公网。
 
 ## 已实现功能
 
